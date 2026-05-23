@@ -238,7 +238,7 @@ export default function MapScreen() {
       <View style={styles.controls}>
         <TouchableOpacity style={styles.sortButton} onPress={() => setShowSortMenu(!showSortMenu)}>
           <Text style={styles.sortButtonText}>
-            {sortBy === 'distance' ? '📍 Distance' : '⭐ Rating'} ▾
+            {sortBy === 'distance' ? 'Distance' : 'Rating'} ▾
           </Text>
         </TouchableOpacity>
         {loading && <ActivityIndicator size="small" color="#FFF8F9" style={{ marginLeft: 10 }} />}
