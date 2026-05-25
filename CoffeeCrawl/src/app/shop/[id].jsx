@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  TextInput, ScrollView, Alert, Modal
+  TextInput, ScrollView, Alert, Modal, ActivityIndicator
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { supabase } from '../../../lib/supabase';
 
 export default function ShopDetailScreen() {
-  const { name, address, rating } = useLocalSearchParams();
+  const { id, name, address, rating } = useLocalSearchParams();
   const router = useRouter();
 
   const [userScore, setUserScore] = useState(null);
@@ -14,19 +15,75 @@ export default function ShopDetailScreen() {
   const [note, setNote] = useState('');
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  function handleSubmitRating() {
+  async function handleSubmitRating() {
     if (!userScore) {
       Alert.alert('Score required', 'Please select a score before submitting.');
       return;
     }
-    setSubmitted(true);
-    setShowRatingModal(false);
-    Alert.alert(
-      'Rating saved!',
-      `You rated ${name} a ${userScore}/10${drinkOrdered ? ` for your ${drinkOrdered}` : ''}.`,
-      [{ text: 'Great!' }]
-    );
+
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Not logged in', 'Please log in to rate shops.');
+        setSaving(false);
+        return;
+      }
+
+      // Check if shop exists in our database
+      const { data: existingShop } = await supabase
+        .from('shops')
+        .select('id')
+        .eq('google_place_id', id)
+        .maybeSingle();
+
+      let shopId;
+      if (!existingShop) {
+        // Create the shop
+        const { data: newShop, error: shopError } = await supabase
+          .from('shops')
+          .insert({
+            name: name,
+            address: address,
+            google_place_id: id,
+          })
+          .select('id')
+          .single();
+        if (shopError) throw shopError;
+        shopId = newShop.id;
+      } else {
+        shopId = existingShop.id;
+      }
+
+      // Save the rating
+      const { error: ratingError } = await supabase
+        .from('ratings')
+        .upsert({
+          user_id: user.id,
+          shop_id: shopId,
+          score: userScore,
+          drink_ordered: drinkOrdered || null,
+          note: note || null,
+          visited_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,shop_id' });
+
+      if (ratingError) throw ratingError;
+
+      setSubmitted(true);
+      setShowRatingModal(false);
+      Alert.alert(
+        'Rating saved!',
+        `You rated ${name} a ${userScore}/5${drinkOrdered ? ` for your ${drinkOrdered}` : ''}.`,
+        [{ text: 'Great!' }]
+      );
+    } catch (e) {
+      console.error('Rating error:', e);
+      Alert.alert('Error', 'Could not save rating. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -57,7 +114,10 @@ export default function ShopDetailScreen() {
             <Text style={styles.submittedScore}>{userScore} / 5</Text>
             {drinkOrdered ? <Text style={styles.submittedDrink}>{drinkOrdered}</Text> : null}
             {note ? <Text style={styles.submittedNote}>"{note}"</Text> : null}
-            <TouchableOpacity style={styles.editButton} onPress={() => { setSubmitted(false); setShowRatingModal(true); }}>
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => { setSubmitted(false); setShowRatingModal(true); }}
+            >
               <Text style={styles.editButtonText}>Edit Rating</Text>
             </TouchableOpacity>
           </View>
@@ -76,7 +136,7 @@ export default function ShopDetailScreen() {
 
             <Text style={styles.modalLabel}>Score (1–5)</Text>
             <View style={styles.scoreRow}>
-              {[1,2,3,4,5].map(n => (
+              {[1, 2, 3, 4, 5].map(n => (
                 <TouchableOpacity
                   key={n}
                   style={[styles.scoreBtn, userScore === n && styles.scoreBtnActive]}
@@ -109,11 +169,22 @@ export default function ShopDetailScreen() {
             />
 
             <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.modalCancel} onPress={() => setShowRatingModal(false)}>
+              <TouchableOpacity
+                style={styles.modalCancel}
+                onPress={() => setShowRatingModal(false)}
+              >
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSubmit} onPress={handleSubmitRating}>
-                <Text style={styles.modalSubmitText}>Save Rating</Text>
+              <TouchableOpacity
+                style={styles.modalSubmit}
+                onPress={handleSubmitRating}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#FFF8F9" />
+                ) : (
+                  <Text style={styles.modalSubmitText}>Save Rating</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -183,10 +254,10 @@ const styles = StyleSheet.create({
   },
   modalTitle: { fontSize: 18, fontWeight: '700', color: '#3D2B1F', marginBottom: 16 },
   modalLabel: { fontSize: 13, fontWeight: '600', color: '#A89880', marginBottom: 8, marginTop: 12 },
-  scoreRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  scoreRow: { flexDirection: 'row', gap: 12 },
   scoreBtn: {
-    width: 38,
-    height: 38,
+    flex: 1,
+    height: 48,
     borderRadius: 10,
     borderWidth: 1.5,
     borderColor: '#D8C4B8',
@@ -195,7 +266,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF0F2',
   },
   scoreBtnActive: { backgroundColor: '#A89880', borderColor: '#A89880' },
-  scoreBtnText: { fontSize: 14, fontWeight: '600', color: '#A89880' },
+  scoreBtnText: { fontSize: 16, fontWeight: '600', color: '#A89880' },
   scoreBtnTextActive: { color: '#FFF8F9' },
   input: {
     borderWidth: 1,

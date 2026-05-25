@@ -6,6 +6,7 @@ import {
 import MapView, { Marker, Callout } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
+import { supabase } from '../../../lib/supabase';
 
 const GOOGLE_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY;
 
@@ -59,6 +60,28 @@ export default function MapScreen() {
     return Math.min(Math.round(radiusKm * 1000), 20000);
   }
 
+  async function fetchSupabaseShops() {
+    try {
+      const { data } = await supabase
+        .from('shops')
+        .select('*')
+        .not('lat', 'is', null)
+        .not('lng', 'is', null);
+      return (data || []).map(s => ({
+        id: `supabase-${s.id}`,
+        supabaseId: s.id,
+        displayName: { text: s.name },
+        formattedAddress: s.address,
+        location: { latitude: s.lat, longitude: s.lng },
+        rating: s.avg_score || null,
+        isManual: true,
+      }));
+    } catch (e) {
+      console.error('Supabase shops error:', e);
+      return [];
+    }
+  }
+
   async function fetchNearbyShops(lat, lng, radius) {
     if (fetchController.current) {
       fetchController.current.abort();
@@ -68,7 +91,7 @@ export default function MapScreen() {
 
     setLoading(true);
     try {
-      const [r1, r2, r3] = await Promise.all([
+      const [r1, r2, r3, supabaseShops] = await Promise.all([
         fetch('https://places.googleapis.com/v1/places:searchNearby', {
           method: 'POST',
           signal,
@@ -117,6 +140,7 @@ export default function MapScreen() {
             },
           }),
         }),
+        fetchSupabaseShops(),
       ]);
 
       if (signal.aborted) return;
@@ -125,15 +149,16 @@ export default function MapScreen() {
 
       if (signal.aborted) return;
 
-      const all = [...(d1.places || []), ...(d2.places || []), ...(d3.places || [])];
+      const googleShops = [...(d1.places || []), ...(d2.places || []), ...(d3.places || [])];
+
       const seen = new Set();
-      const unique = all.filter(p => {
+      const uniqueGoogle = googleShops.filter(p => {
         if (seen.has(p.id)) return false;
         seen.add(p.id);
         return true;
       });
 
-      const filtered = unique.filter(p => {
+      const filteredGoogle = uniqueGoogle.filter(p => {
         const name = p.displayName?.text?.toLowerCase() || '';
         return !name.includes('mcdonald') &&
                !name.includes('burger') &&
@@ -153,7 +178,14 @@ export default function MapScreen() {
                !name.includes('pizza');
       });
 
-      setShops(filtered.slice(0, 30));
+      // Merge Supabase shops — avoid duplicates by name
+      const googleNames = new Set(filteredGoogle.map(s => s.displayName?.text?.toLowerCase()));
+      const uniqueSupabase = supabaseShops.filter(s =>
+        !googleNames.has(s.displayName?.text?.toLowerCase())
+      );
+
+      const all = [...filteredGoogle, ...uniqueSupabase].slice(0, 40);
+      setShops(all);
     } catch (e) {
       if (e.name === 'AbortError') return;
       console.error('Fetch error:', e);
@@ -189,16 +221,28 @@ export default function MapScreen() {
     });
   }
 
-  function handleAddShop() {
+  async function handleAddShop() {
     if (!newShopName.trim() || !newShopAddress.trim()) {
       Alert.alert('Missing info', 'Please enter both a name and address.');
       return;
     }
-    Alert.alert(
-      'Thanks!',
-      `We've noted "${newShopName}" at ${newShopAddress}. Our team will review and add it soon.`,
-      [{ text: 'OK', onPress: () => { setShowAddModal(false); setNewShopName(''); setNewShopAddress(''); } }]
-    );
+    try {
+      const { error } = await supabase
+        .from('shops')
+        .insert({
+          name: newShopName.trim(),
+          address: newShopAddress.trim(),
+          google_place_id: `manual-${Date.now()}`,
+        });
+      if (error) throw error;
+      Alert.alert(
+        'Shop added!',
+        `${newShopName} has been added to Coffee Crawl.`,
+        [{ text: 'OK', onPress: () => { setShowAddModal(false); setNewShopName(''); setNewShopAddress(''); } }]
+      );
+    } catch (e) {
+      Alert.alert('Error', 'Could not add shop. Please try again.');
+    }
   }
 
   if (error) {
@@ -236,19 +280,20 @@ export default function MapScreen() {
               onPress={() => router.push({
                 pathname: '/shop/[id]',
                 params: {
-                  id: shop.id,
+                  id: shop.supabaseId || shop.id,
                   name: shop.displayName?.text,
                   address: shop.formattedAddress,
                   rating: shop.rating,
                 }
               })}
             >
-              <View style={styles.pin}>
+              <View style={[styles.pin, shop.isManual && styles.pinManual]}>
                 <Text style={styles.pinEmoji}>☕</Text>
               </View>
               <Callout tooltip>
                 <View style={styles.callout}>
                   <Text style={styles.calloutName}>{shop.displayName?.text}</Text>
+                  {shop.isManual && <Text style={styles.calloutManual}>Added by community</Text>}
                   {shop.rating && <Text style={styles.calloutRating}>{shop.rating} / 5</Text>}
                   <Text style={styles.calloutTap}>Tap to view</Text>
                 </View>
@@ -321,7 +366,7 @@ export default function MapScreen() {
                 onPress={() => router.push({
                   pathname: '/shop/[id]',
                   params: {
-                    id: item.id,
+                    id: item.supabaseId || item.id,
                     name: item.displayName?.text,
                     address: item.formattedAddress,
                     rating: item.rating,
@@ -332,6 +377,7 @@ export default function MapScreen() {
                   <Text style={styles.cardName}>{item.displayName?.text}</Text>
                   <Text style={styles.cardAddress} numberOfLines={1}>{item.formattedAddress}</Text>
                   {dist && <Text style={styles.cardDist}>{dist} km away</Text>}
+                  {item.isManual && <Text style={styles.cardManual}>Community added</Text>}
                 </View>
                 {item.rating && (
                   <View style={styles.ratingBadge}>
@@ -348,7 +394,7 @@ export default function MapScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>Add a Coffee Shop</Text>
-            <Text style={styles.modalSub}>Don't see your favorite spot? Let us know!</Text>
+            <Text style={styles.modalSub}>Don't see your favorite spot? Add it directly!</Text>
             <TextInput
               style={styles.input}
               placeholder="Shop name"
@@ -443,6 +489,7 @@ const styles = StyleSheet.create({
   cardName: { fontSize: 14, fontWeight: '600', color: '#FFF8F9' },
   cardAddress: { fontSize: 12, color: '#F0E8E0', marginTop: 2 },
   cardDist: { fontSize: 11, color: '#FFE8EC', marginTop: 2 },
+  cardManual: { fontSize: 10, color: '#D8AA84', marginTop: 2, fontStyle: 'italic' },
   ratingBadge: {
     backgroundColor: '#FFF0F2',
     borderRadius: 8,
@@ -457,6 +504,10 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#FFF8F9',
   },
+  pinManual: {
+    backgroundColor: '#D8AA84',
+    borderColor: '#FFF8F9',
+  },
   pinEmoji: { fontSize: 18 },
   callout: {
     backgroundColor: '#FFF8F9',
@@ -465,6 +516,7 @@ const styles = StyleSheet.create({
     width: 160,
   },
   calloutName: { fontSize: 12, fontWeight: '600', color: '#3D2B1F' },
+  calloutManual: { fontSize: 10, color: '#D8AA84', marginTop: 1, fontStyle: 'italic' },
   calloutRating: { fontSize: 11, color: '#A89880', marginTop: 2 },
   calloutTap: { fontSize: 10, color: '#C4B09A', marginTop: 4, fontStyle: 'italic' },
   modalOverlay: {
