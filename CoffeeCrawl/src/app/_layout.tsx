@@ -1,20 +1,48 @@
-import { Tabs } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Tabs, useRouter, useSegments } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../../lib/supabase';
 
-export default function TabLayout() {
+export default function RootLayout() {
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const segments = useSegments();
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    const inAuthScreen = segments[0] === 'auth';
+    if (!session && !inAuthScreen) {
+      router.replace('/auth');
+    } else if (session && inAuthScreen) {
+      router.replace('/');
+    }
+  }, [session, loading, segments]);
+
+  if (loading) return null;
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#BA7517',
+        tabBarActiveTintColor: '#D8AA84',
         tabBarInactiveTintColor: '#888',
-        tabBarStyle: {
-          backgroundColor: '#fff',
-          borderTopColor: '#eee',
-        },
-        headerStyle: {
-          backgroundColor: '#fff',
-        },
-        headerTintColor: '#1a1a1a',
+        tabBarStyle: { backgroundColor: '#fff', borderTopColor: '#eee' },
+        headerStyle: { backgroundColor: '#A89880' },
+        headerTintColor: '#FFF8F9',
+        headerTitleStyle: { fontWeight: '700' },
       }}
     >
       <Tabs.Screen
@@ -52,6 +80,18 @@ export default function TabLayout() {
             <Ionicons name="person-outline" size={size} color={color} />
           ),
         }}
+      />
+      <Tabs.Screen
+        name="auth"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="shop/[id]"
+        options={{ href: null, title: 'Shop' }}
+      />
+      <Tabs.Screen
+        name="index"
+        options={{ href: null }}
       />
     </Tabs>
   );
