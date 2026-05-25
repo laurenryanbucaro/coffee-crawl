@@ -20,9 +20,8 @@ export default function MapScreen() {
   const [newShopName, setNewShopName] = useState('');
   const [newShopAddress, setNewShopAddress] = useState('');
   const [region, setRegion] = useState(null);
-  const [searchRegion, setSearchRegion] = useState(null);
   const mapRef = useRef(null);
-  const fetchController = useRef(null);
+const debounceTimer = useRef(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -56,22 +55,15 @@ export default function MapScreen() {
   function getRadiusFromRegion(reg) {
     const kmPerDegree = 111;
     const radiusKm = (reg.latitudeDelta / 2) * kmPerDegree;
-    return Math.min(Math.round(radiusKm * 1000), 20000);
+    return Math.min(Math.round(radiusKm * 1000), 50000);
   }
 
   async function fetchNearbyShops(lat, lng, radius) {
-    if (fetchController.current) {
-      fetchController.current.abort();
-    }
-    fetchController.current = new AbortController();
-    const signal = fetchController.current.signal;
-
     setLoading(true);
     try {
       const [r1, r2, r3] = await Promise.all([
         fetch('https://places.googleapis.com/v1/places:searchNearby', {
           method: 'POST',
-          signal,
           headers: {
             'Content-Type': 'application/json',
             'X-Goog-Api-Key': GOOGLE_KEY,
@@ -87,7 +79,6 @@ export default function MapScreen() {
         }),
         fetch('https://places.googleapis.com/v1/places:searchText', {
           method: 'POST',
-          signal,
           headers: {
             'Content-Type': 'application/json',
             'X-Goog-Api-Key': GOOGLE_KEY,
@@ -103,7 +94,6 @@ export default function MapScreen() {
         }),
         fetch('https://places.googleapis.com/v1/places:searchText', {
           method: 'POST',
-          signal,
           headers: {
             'Content-Type': 'application/json',
             'X-Goog-Api-Key': GOOGLE_KEY,
@@ -119,13 +109,9 @@ export default function MapScreen() {
         }),
       ]);
 
-      if (signal.aborted) return;
-
       const [d1, d2, d3] = await Promise.all([r1.json(), r2.json(), r3.json()]);
-
-      if (signal.aborted) return;
-
       const all = [...(d1.places || []), ...(d2.places || []), ...(d3.places || [])];
+
       const seen = new Set();
       const unique = all.filter(p => {
         if (seen.has(p.id)) return false;
@@ -153,27 +139,32 @@ export default function MapScreen() {
                !name.includes('pizza');
       });
 
-      setShops(filtered.slice(0, 30));
+      setShops(filtered);
     } catch (e) {
-      if (e.name === 'AbortError') return;
       console.error('Fetch error:', e);
+      setError('Could not fetch coffee shops');
     } finally {
-      if (!signal.aborted) setLoading(false);
+      setLoading(false);
     }
   }
 
   function handleRegionChangeComplete(newRegion) {
-    setSearchRegion(newRegion);
+    setRegion(newRegion);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      const radius = getRadiusFromRegion(newRegion);
+      fetchNearbyShops(newRegion.latitude, newRegion.longitude, radius);
+    }, 1000);
   }
 
   function getDistance(lat1, lng1, lat2, lng2) {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
               Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLng / 2) * Math.sin(dLng / 2);
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+              Math.sin(dLng/2) * Math.sin(dLng/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   }
 
   function getSortedShops() {
@@ -264,22 +255,7 @@ export default function MapScreen() {
             {sortBy === 'distance' ? 'Distance' : 'Rating'} ▾
           </Text>
         </TouchableOpacity>
-        {loading ? (
-          <ActivityIndicator size="small" color="#FFF8F9" />
-        ) : (
-          <TouchableOpacity
-            style={styles.searchHereButton}
-            onPress={() => {
-              if (searchRegion) {
-                setRegion(searchRegion);
-                const radius = getRadiusFromRegion(searchRegion);
-                fetchNearbyShops(searchRegion.latitude, searchRegion.longitude, radius);
-              }
-            }}
-          >
-            <Text style={styles.searchHereText}>Search here</Text>
-          </TouchableOpacity>
-        )}
+        {loading && <ActivityIndicator size="small" color="#FFF8F9" style={{ marginLeft: 10 }} />}
         <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
           <Text style={styles.addButtonText}>+ Add Shop</Text>
         </TouchableOpacity>
@@ -298,16 +274,13 @@ export default function MapScreen() {
 
       {sortedShops.length === 0 && !loading ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>No coffee shops found — tap "Search here" after moving the map</Text>
+          <Text style={styles.emptyText}>No coffee shops found in this area</Text>
         </View>
       ) : (
         <FlatList
           style={styles.list}
           data={sortedShops}
           keyExtractor={(item) => item.id}
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={10}
-          windowSize={5}
           renderItem={({ item }) => {
             const dist = location ? getDistance(
               region?.latitude || location.latitude,
@@ -383,8 +356,8 @@ const styles = StyleSheet.create({
   map: { height: '45%' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#A89880' },
   errorText: { color: '#FFF8F9', fontSize: 14 },
-  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  emptyText: { color: '#FFF8F9', fontSize: 14, textAlign: 'center' },
+  empty: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  emptyText: { color: '#FFF8F9', fontSize: 14 },
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -400,13 +373,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   sortButtonText: { fontSize: 13, color: '#A89880', fontWeight: '600' },
-  searchHereButton: {
-    backgroundColor: '#3D2B1F',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  searchHereText: { fontSize: 13, color: '#FFF8F9', fontWeight: '600' },
   addButton: {
     backgroundColor: '#FFF0F2',
     borderRadius: 20,
