@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  ActivityIndicator, TouchableOpacity, RefreshControl, Image
+  ActivityIndicator, TouchableOpacity, RefreshControl, Image, ScrollView
 } from 'react-native';
 import { supabase } from '../../../lib/supabase';
 import { useRouter } from 'expo-router';
@@ -10,7 +10,6 @@ export default function FeedScreen() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [userId, setUserId] = useState(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -21,25 +20,23 @@ export default function FeedScreen() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      setUserId(user.id);
 
-      // Get list of people the user follows
       const { data: following } = await supabase
         .from('follows')
         .select('following_id')
         .eq('follower_id', user.id);
 
       const followingIds = (following || []).map(f => f.following_id);
-      // Include own posts too
       followingIds.push(user.id);
 
-      // Get ratings from those users with shop and user info
+      // Get ratings with posts (photos) joined
       const { data: ratingsData } = await supabase
         .from('ratings')
         .select(`
           *,
           shops(name, address, google_place_id),
-          users(display_name, username, avatar_url)
+          users(display_name, username, avatar_url),
+          posts(photo_urls, caption)
         `)
         .in('user_id', followingIds)
         .order('visited_at', { ascending: false })
@@ -81,12 +78,12 @@ export default function FeedScreen() {
     return (
       <View style={styles.centered}>
         <Text style={styles.emptyTitle}>Your feed is empty</Text>
-        <Text style={styles.emptySubtitle}>Follow friends to see their coffee crawls here</Text>
+        <Text style={styles.emptySubtitle}>Rate a coffee shop or follow friends to see their crawls here</Text>
         <TouchableOpacity
           style={styles.findFriendsButton}
-          onPress={() => router.push('/(tabs)/friends')}
+          onPress={() => router.push('/(tabs)/map')}
         >
-          <Text style={styles.findFriendsText}>Find Friends</Text>
+          <Text style={styles.findFriendsText}>Find Coffee Shops</Text>
         </TouchableOpacity>
       </View>
     );
@@ -100,59 +97,77 @@ export default function FeedScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#D8AA84" />
         }
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            {/* Card header */}
-            <View style={styles.cardHeader}>
-              <View style={styles.avatarWrap}>
-                {item.users?.avatar_url ? (
-                  <Image source={{ uri: item.users.avatar_url }} style={styles.avatar} />
-                ) : (
-                  <View style={styles.avatarPlaceholder}>
-                    <Text style={styles.avatarText}>
-                      {item.users?.display_name?.[0]?.toUpperCase() || '?'}
-                    </Text>
-                  </View>
-                )}
+        renderItem={({ item }) => {
+          const photoUrls = item.posts?.[0]?.photo_urls || [];
+          const hasPhotos = photoUrls.length > 0;
+
+          return (
+            <View style={styles.card}>
+              {/* Header */}
+              <View style={styles.cardHeader}>
+                <View style={styles.avatarWrap}>
+                  {item.users?.avatar_url ? (
+                    <Image source={{ uri: item.users.avatar_url }} style={styles.avatar} />
+                  ) : (
+                    <View style={styles.avatarPlaceholder}>
+                      <Text style={styles.avatarText}>
+                        {item.users?.display_name?.[0]?.toUpperCase() || '?'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.headerInfo}>
+                  <Text style={styles.displayName}>{item.users?.display_name}</Text>
+                  <Text style={styles.meta}>
+                    @{item.users?.username} · {timeAgo(item.visited_at)}
+                  </Text>
+                </View>
+                <View style={styles.scoreBadge}>
+                  <Text style={styles.scoreText}>{item.score}/5</Text>
+                </View>
               </View>
-              <View style={styles.headerInfo}>
-                <Text style={styles.displayName}>{item.users?.display_name}</Text>
-                <Text style={styles.meta}>
-                  @{item.users?.username} · {timeAgo(item.visited_at)}
-                </Text>
-              </View>
-              <View style={styles.scoreBadge}>
-                <Text style={styles.scoreText}>{item.score}</Text>
-              </View>
+
+              {/* Photos collage */}
+              {hasPhotos && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.photoScroll}
+                >
+                  {photoUrls.map((url, i) => (
+                    <Image key={i} source={{ uri: url }} style={styles.photo} />
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* Shop info */}
+              <TouchableOpacity
+                style={styles.shopInfo}
+                onPress={() => router.push({
+                  pathname: '/shop/[id]',
+                  params: {
+                    id: item.shop_id,
+                    name: item.shops?.name,
+                    address: item.shops?.address,
+                  }
+                })}
+              >
+                <Text style={styles.shopName}>{item.shops?.name}</Text>
+                <Text style={styles.shopAddress} numberOfLines={1}>{item.shops?.address}</Text>
+              </TouchableOpacity>
+
+              {/* Drink and note */}
+              {item.drink_ordered && (
+                <View style={styles.drinkPill}>
+                  <Text style={styles.drinkText}>{item.drink_ordered}</Text>
+                </View>
+              )}
+              {item.note && (
+                <Text style={styles.note}>"{item.note}"</Text>
+              )}
             </View>
-
-            {/* Shop info */}
-            <TouchableOpacity
-              style={styles.shopInfo}
-              onPress={() => router.push({
-                pathname: '/shop/[id]',
-                params: {
-                  id: item.shop_id,
-                  name: item.shops?.name,
-                  address: item.shops?.address,
-                }
-              })}
-            >
-              <Text style={styles.shopName}>{item.shops?.name}</Text>
-              <Text style={styles.shopAddress} numberOfLines={1}>{item.shops?.address}</Text>
-            </TouchableOpacity>
-
-            {/* Drink and note */}
-            {item.drink_ordered && (
-              <View style={styles.drinkPill}>
-                <Text style={styles.drinkText}>{item.drink_ordered}</Text>
-              </View>
-            )}
-            {item.note && (
-              <Text style={styles.note}>"{item.note}"</Text>
-            )}
-          </View>
-        )}
+          );
+        }}
       />
     </View>
   );
@@ -178,12 +193,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 12,
     borderRadius: 16,
-    padding: 16,
+    overflow: 'hidden',
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    padding: 14,
+    paddingBottom: 10,
   },
   avatarWrap: { marginRight: 10 },
   avatar: { width: 40, height: 40, borderRadius: 20 },
@@ -202,12 +218,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  scoreText: { fontSize: 15, fontWeight: '700', color: '#A89880' },
+  scoreText: { fontSize: 14, fontWeight: '700', color: '#A89880' },
+  photoScroll: { marginBottom: 2 },
+  photo: {
+    width: 260,
+    height: 200,
+    marginRight: 2,
+  },
   shopInfo: {
     backgroundColor: '#A89880',
+    marginHorizontal: 14,
+    marginVertical: 10,
     borderRadius: 10,
     padding: 10,
-    marginBottom: 10,
   },
   shopName: { fontSize: 14, fontWeight: '600', color: '#FFF8F9' },
   shopAddress: { fontSize: 12, color: '#F0E8E0', marginTop: 2 },
@@ -217,8 +240,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 4,
-    marginBottom: 8,
+    marginHorizontal: 14,
+    marginBottom: 10,
   },
   drinkText: { fontSize: 12, color: '#A89880', fontWeight: '500' },
-  note: { fontSize: 13, color: '#FFE8EC', fontStyle: 'italic' },
+  note: {
+    fontSize: 13, color: '#FFE8EC',
+    fontStyle: 'italic',
+    marginHorizontal: 14,
+    marginBottom: 14,
+  },
 });

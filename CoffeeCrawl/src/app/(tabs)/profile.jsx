@@ -67,18 +67,32 @@ export default function ProfileScreen() {
 
     setUploadingPhoto(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const uri = result.assets[0].uri;
       const fileName = `${profile.id}-${Date.now()}.jpg`;
 
-      const response = await fetch(uri);
-      const blob = await response.blob();
+      const formData = new FormData();
+      formData.append('file', {
+        uri,
+        name: fileName,
+        type: 'image/jpeg',
+      });
 
-      const { error: uploadError } = await supabase.storage
-        .from('avatar')
-        .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
+      const uploadResponse = await fetch(
+        `${process.env.EXPO_PUBLIC_SUPABASE_URL}/storage/v1/object/avatar/${fileName}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'x-upsert': 'true',
+          },
+          body: formData,
+        }
+      );
 
-      if (uploadError) {
-        Alert.alert('Upload failed', uploadError.message);
+      if (!uploadResponse.ok) {
+        const err = await uploadResponse.text();
+        Alert.alert('Upload failed', err);
         return;
       }
 
@@ -97,6 +111,7 @@ export default function ProfileScreen() {
       }
 
       setProfile({ ...profile, avatar_url: publicUrl });
+      Alert.alert('Photo updated!', 'Your profile photo has been saved.');
     } catch (e) {
       Alert.alert('Error', 'Could not upload photo. Please try again.');
       console.error(e);
@@ -142,7 +157,15 @@ export default function ProfileScreen() {
     ]);
   }
 
-  function getBestRating() {
+function getCrawlLevel(count) {
+    if (count >= 100) return { title: 'Crawl Legend', color: '#FFB6C1' };
+    if (count >= 50) return { title: 'Head Roaster', color: '#FFB6C1' };
+    if (count >= 30) return { title: 'Coffee Snob', color: '#FFB6C1' };
+    if (count >= 15) return { title: 'Buzz Chaser', color: '#FFB6C1' };
+    if (count >= 5) return { title: 'First Sip', color: '#FFB6C1' };
+    return { title: 'Coffee Virgin', color: '#FFB6C1' };
+  }
+function getBestRating() {
     if (ratings.length === 0) return null;
     return ratings[0];
   }
@@ -161,6 +184,7 @@ export default function ProfileScreen() {
 
   const topShops = getTopShops();
   const bestRating = getBestRating();
+  const level = getCrawlLevel(ratings.length);
 
   return (
     <ScrollView style={styles.container}>
@@ -206,6 +230,12 @@ export default function ProfileScreen() {
             {profile?.signature_drink || 'Tap to set your signature drink'}
           </Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Crawl Level Badge */}
+      <View style={[styles.levelBadge, { backgroundColor: level.color }]}>
+        <Text style={styles.levelTitle}>{level.title}</Text>
+        <Text style={styles.levelCount}>{ratings.length} ratings</Text>
       </View>
 
       {/* Stats */}
@@ -352,7 +382,7 @@ const styles = StyleSheet.create({
   avatarWrap: { alignItems: 'center', marginBottom: 12 },
   avatar: {
     width: 80, height: 80, borderRadius: 40,
-    backgroundColor: '#FFF0F2',
+    backgroundColor: '#FFB6C1',
     justifyContent: 'center', alignItems: 'center',
     marginBottom: 4,
   },
@@ -360,20 +390,30 @@ const styles = StyleSheet.create({
     width: 80, height: 80, borderRadius: 40,
     marginBottom: 4,
   },
-  avatarText: { fontSize: 28, fontWeight: '700', color: '#A89880' },
+  avatarText: { fontSize: 28, fontWeight: '700', color: '#3D2B1F' },
   editAvatarHint: { fontSize: 11, color: '#F0E8E0' },
   displayName: { fontSize: 22, fontWeight: '700', color: '#FFF8F9', marginBottom: 2, textAlign: 'center' },
   username: { fontSize: 14, color: '#F0E8E0', textAlign: 'center' },
   editNameHint: { fontSize: 11, color: '#FFE8EC', textAlign: 'center', marginBottom: 16, marginTop: 2 },
   signaturePill: {
-    backgroundColor: '#9A8870',
+    backgroundColor: '#FFB6C1',
     borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 10,
     alignItems: 'center',
   },
-  signatureLabel: { fontSize: 11, color: '#F0E8E0', marginBottom: 2 },
-  signatureDrink: { fontSize: 14, fontWeight: '600', color: '#FFF8F9' },
+  signatureLabel: { fontSize: 11, color: '#3D2B1F', marginBottom: 2 },
+  signatureDrink: { fontSize: 14, fontWeight: '600', color: '#3D2B1F' },
+  levelBadge: {
+    alignSelf: 'center',
+    borderRadius: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  levelTitle: { fontSize: 15, fontWeight: '700', color: '#3D2B1F' },
+  levelCount: { fontSize: 11, color: '#3D2B1F', marginTop: 2 },
   statsRow: {
     flexDirection: 'row',
     backgroundColor: '#9A8870',
@@ -403,21 +443,21 @@ const styles = StyleSheet.create({
   shopDrink: { fontSize: 12, color: '#F0E8E0', marginTop: 2 },
   ratingNote: { fontSize: 11, color: '#FFE8EC', fontStyle: 'italic', marginTop: 2 },
   scoreBadge: {
-    backgroundColor: '#FFF0F2',
+    backgroundColor: '#FFB6C1',
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  scoreText: { fontSize: 14, fontWeight: '700', color: '#A89880' },
+  scoreText: { fontSize: 14, fontWeight: '700', color: '#3D2B1F' },
   emptyState: { alignItems: 'center', padding: 40 },
   emptyText: { fontSize: 15, color: '#F0E8E0', marginBottom: 16 },
   mapButton: {
-    backgroundColor: '#FFF0F2',
+    backgroundColor: '#FFB6C1',
     borderRadius: 12,
     paddingHorizontal: 20,
     paddingVertical: 10,
   },
-  mapButtonText: { fontSize: 14, fontWeight: '600', color: '#A89880' },
+  mapButtonText: { fontSize: 14, fontWeight: '600', color: '#3D2B1F' },
   signOutButton: {
     margin: 16, marginBottom: 40,
     padding: 14, borderRadius: 12,
@@ -439,7 +479,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#D8C4B8',
     borderRadius: 10, padding: 12,
     fontSize: 14, color: '#3D2B1F',
-    backgroundColor: '#FFF0F2', marginBottom: 8,
+    backgroundColor: '#FFB6C1', marginBottom: 8,
   },
   modalButtons: { flexDirection: 'row', marginTop: 12 },
   modalCancel: {
