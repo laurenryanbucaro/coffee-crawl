@@ -41,7 +41,7 @@ export default function ProfileScreen() {
         .from('users').select('*').eq('id', user.id).single();
       const { data: ratingsData } = await supabase
         .from('ratings')
-        .select('*, shops(name, address)')
+        .select('*, shops(name, address, google_place_id)')
         .eq('user_id', user.id)
         .order('score', { ascending: false });
       setProfile(profileData);
@@ -199,7 +199,14 @@ export default function ProfileScreen() {
         </View>
         <View style={styles.statDivider} />
         <View style={styles.stat}>
-          <TouchableOpacity onPress={() => bestRating && router.push({ pathname: '/shop/[id]', params: { id: bestRating.shop_id, name: bestRating.shops?.name, address: bestRating.shops?.address } })}>
+          <TouchableOpacity onPress={() => bestRating && router.push({
+            pathname: '/shop/[id]',
+            params: {
+              id: bestRating.shops?.google_place_id || bestRating.shop_id,
+              name: bestRating.shops?.name,
+              address: bestRating.shops?.address
+            }
+          })}>
             <Text style={styles.statNum}>{bestRating ? bestRating.score : '—'}</Text>
             <Text style={styles.statLabel}>Best score</Text>
             {bestRating && <Text style={styles.statShop} numberOfLines={1}>{bestRating.shops?.name}</Text>}
@@ -229,7 +236,14 @@ export default function ProfileScreen() {
       {activeTab === 'top' && (
         <View style={styles.section}>
           {topShops.length > 0 ? topShops.map((r, i) => (
-            <TouchableOpacity key={r.id} style={styles.shopRow} onPress={() => router.push({ pathname: '/shop/[id]', params: { id: r.shop_id, name: r.shops?.name, address: r.shops?.address } })}>
+            <TouchableOpacity key={r.id} style={styles.shopRow} onPress={() => router.push({
+              pathname: '/shop/[id]',
+              params: {
+                id: r.shops?.google_place_id || r.shop_id,
+                name: r.shops?.name,
+                address: r.shops?.address
+              }
+            })}>
               <Text style={styles.shopRank}>#{i + 1}</Text>
               <View style={styles.shopInfo}>
                 <Text style={styles.shopName}>{r.shops?.name}</Text>
@@ -253,7 +267,14 @@ export default function ProfileScreen() {
       {activeTab === 'all' && (
         <View style={styles.section}>
           {ratings.length > 0 ? ratings.map((r, i) => (
-            <TouchableOpacity key={r.id} style={styles.shopRow} onPress={() => router.push({ pathname: '/shop/[id]', params: { id: r.shop_id, name: r.shops?.name, address: r.shops?.address } })}>
+            <TouchableOpacity key={r.id} style={styles.shopRow} onPress={() => router.push({
+              pathname: '/shop/[id]',
+              params: {
+                id: r.shops?.google_place_id || r.shop_id,
+                name: r.shops?.name,
+                address: r.shops?.address
+              }
+            })}>
               <Text style={styles.shopRank}>#{i + 1}</Text>
               <View style={styles.shopInfo}>
                 <Text style={styles.shopName}>{r.shops?.name}</Text>
