@@ -8,6 +8,11 @@ import { supabase } from '../../lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 
 const GOOGLE_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY;
+const RUST = '#8C3235';
+const RUST_DARK = '#672427';
+const TAN = '#DCCAB4';
+const ESPRESSO = '#A36054';
+const TEXT_LIGHT = '#E8DCC6';
 
 export default function ComposePostScreen() {
   const router = useRouter();
@@ -224,12 +229,12 @@ export default function ComposePostScreen() {
           <TextInput
             style={styles.searchInput}
             placeholder="Search coffee shops..."
-            placeholderTextColor="#C4B09A"
+            placeholderTextColor={ESPRESSO}
             value={searchQuery}
             onChangeText={handleSearchChange}
             autoFocus
           />
-          {searching && <ActivityIndicator color="#FFB6C1" style={{ marginTop: 12 }} />}
+          {searching && <ActivityIndicator color={TAN} style={{ marginTop: 12 }} />}
           <ScrollView style={styles.resultsList}>
             {searchResults.map((shop) => (
               <TouchableOpacity key={shop.id} style={styles.resultRow} onPress={() => selectShop(shop)}>
@@ -265,7 +270,7 @@ export default function ComposePostScreen() {
           <TextInput
             style={styles.input}
             placeholder="e.g. Iced oat latte"
-            placeholderTextColor="#C4B09A"
+            placeholderTextColor={ESPRESSO}
             value={drinkOrdered}
             onChangeText={setDrinkOrdered}
           />
@@ -274,7 +279,7 @@ export default function ComposePostScreen() {
           <TextInput
             style={[styles.input, styles.inputMulti]}
             placeholder="Share your thoughts..."
-            placeholderTextColor="#C4B09A"
+            placeholderTextColor={ESPRESSO}
             value={note}
             onChangeText={setNote}
             multiline
@@ -283,7 +288,7 @@ export default function ComposePostScreen() {
           <Text style={styles.modalLabel}>Photos & Videos</Text>
           <TouchableOpacity style={styles.mediaPickerButton} onPress={handlePickMedia} disabled={uploadingMedia}>
             {uploadingMedia ? (
-              <ActivityIndicator color="#A89880" />
+              <ActivityIndicator color={RUST_DARK} />
             ) : (
               <Text style={styles.mediaPickerText}>
                 {media.length > 0 ? `${media.length} item${media.length > 1 ? 's' : ''} added` : '+ Add photos or videos'}
@@ -314,7 +319,7 @@ export default function ComposePostScreen() {
           )}
 
           <TouchableOpacity style={styles.submitButton} onPress={handleSubmit} disabled={saving}>
-            {saving ? <ActivityIndicator color="#FFF8F9" /> : <Text style={styles.submitText}>Post</Text>}
+            {saving ? <ActivityIndicator color={TEXT_LIGHT} /> : <Text style={styles.submitText}>Post</Text>}
           </TouchableOpacity>
         </ScrollView>
       )}
@@ -323,64 +328,64 @@ export default function ComposePostScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#A89880' },
+  container: { flex: 1, backgroundColor: RUST },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     padding: 16, paddingTop: 56,
   },
-  backText: { color: '#FFF8F9', fontSize: 14, fontWeight: '600' },
-  headerTitle: { color: '#FFF8F9', fontSize: 16, fontWeight: '700' },
+  backText: { fontFamily: 'Lexend_700Bold', color: TEXT_LIGHT, fontSize: 14 },
+  headerTitle: { fontFamily: 'Modak_400Regular', color: TEXT_LIGHT, fontSize: 18 },
   shopStep: { flex: 1, padding: 16 },
-  stepLabel: { fontSize: 16, fontWeight: '700', color: '#FFF8F9', marginBottom: 12 },
+  stepLabel: { fontFamily: 'Modak_400Regular', fontSize: 18, color: TEXT_LIGHT, marginBottom: 12 },
   searchInput: {
-    backgroundColor: '#FFF0F2', borderRadius: 12, padding: 14,
-    fontSize: 14, color: '#3D2B1F',
+    backgroundColor: TAN, borderRadius: 12, padding: 14,
+    fontFamily: 'Lexend_400Regular', fontSize: 14, color: RUST_DARK,
   },
   resultsList: { marginTop: 12 },
   resultRow: {
-    backgroundColor: '#9A8870', borderRadius: 12, padding: 14, marginBottom: 8,
+    backgroundColor: RUST_DARK, borderRadius: 12, padding: 14, marginBottom: 8,
   },
-  resultName: { fontSize: 14, fontWeight: '600', color: '#FFF8F9' },
-  resultAddress: { fontSize: 12, color: '#F0E8E0', marginTop: 2 },
+  resultName: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: TEXT_LIGHT },
+  resultAddress: { fontFamily: 'Lexend_400Regular', fontSize: 12, color: TAN, marginTop: 2 },
   rateStep: { flex: 1, padding: 16 },
   selectedShopCard: {
-    backgroundColor: '#9A8870', borderRadius: 16, padding: 16, marginBottom: 16,
+    backgroundColor: RUST_DARK, borderRadius: 16, padding: 16, marginBottom: 16,
   },
-  selectedShopName: { fontSize: 18, fontWeight: '700', color: '#FFF8F9' },
-  selectedShopAddress: { fontSize: 13, color: '#F0E8E0', marginTop: 4 },
-  modalLabel: { fontSize: 13, fontWeight: '600', color: '#FFF8F9', marginBottom: 8, marginTop: 12 },
+  selectedShopName: { fontFamily: 'Modak_400Regular', fontSize: 18, color: TEXT_LIGHT },
+  selectedShopAddress: { fontFamily: 'Lexend_400Regular', fontSize: 13, color: TAN, marginTop: 4 },
+  modalLabel: { fontFamily: 'Lexend_600SemiBold', fontSize: 13, color: TEXT_LIGHT, marginBottom: 8, marginTop: 12 },
   scoreRow: { flexDirection: 'row', gap: 12 },
   scoreBtn: {
-    flex: 1, height: 48, borderRadius: 10, borderWidth: 1.5, borderColor: '#D8C4B8',
-    alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFB6C1',
+    flex: 1, height: 48, borderRadius: 10, borderWidth: 1.5, borderColor: ESPRESSO,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: TAN,
   },
-  scoreBtnActive: { backgroundColor: '#3D2B1F', borderColor: '#3D2B1F' },
-  scoreBtnText: { fontSize: 16, fontWeight: '600', color: '#3D2B1F' },
-  scoreBtnTextActive: { color: '#FFB6C1' },
+  scoreBtnActive: { backgroundColor: RUST_DARK, borderColor: RUST_DARK },
+  scoreBtnText: { fontFamily: 'Lexend_700Bold', fontSize: 16, color: RUST_DARK },
+  scoreBtnTextActive: { color: TEXT_LIGHT },
   input: {
-    borderWidth: 1, borderColor: '#D8C4B8', borderRadius: 10, padding: 12,
-    fontSize: 14, color: '#3D2B1F', backgroundColor: '#FFF0F2',
+    borderWidth: 1, borderColor: ESPRESSO, borderRadius: 10, padding: 12,
+    fontFamily: 'Lexend_400Regular', fontSize: 14, color: RUST_DARK, backgroundColor: '#FFFBF2',
   },
   inputMulti: { height: 80, textAlignVertical: 'top' },
   mediaPickerButton: {
-    borderWidth: 1.5, borderColor: '#D8C4B8', borderStyle: 'dashed', borderRadius: 10,
-    padding: 14, alignItems: 'center', backgroundColor: '#FFF0F2',
+    borderWidth: 1.5, borderColor: ESPRESSO, borderStyle: 'dashed', borderRadius: 10,
+    padding: 14, alignItems: 'center', backgroundColor: '#FFFBF2',
   },
-  mediaPickerText: { fontSize: 14, color: '#A89880', fontWeight: '500' },
+  mediaPickerText: { fontFamily: 'Lexend_500Medium', fontSize: 14, color: RUST_DARK },
   mediaPreviewWrap: { position: 'relative', marginRight: 8 },
   mediaPreview: { width: 80, height: 80, borderRadius: 10 },
   videoPreview: {
-    width: 80, height: 80, borderRadius: 10, backgroundColor: '#3D2B1F',
+    width: 80, height: 80, borderRadius: 10, backgroundColor: RUST_DARK,
     justifyContent: 'center', alignItems: 'center',
   },
-  videoIcon: { color: '#FFB6C1', fontSize: 24 },
+  videoIcon: { color: TAN, fontSize: 24 },
   mediaRemove: {
-    position: 'absolute', top: -6, right: -6, backgroundColor: '#3D2B1F',
+    position: 'absolute', top: -6, right: -6, backgroundColor: ESPRESSO,
     borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center',
   },
-  mediaRemoveText: { color: '#FFF8F9', fontSize: 10, fontWeight: '700' },
+  mediaRemoveText: { color: TEXT_LIGHT, fontSize: 10, fontFamily: 'Lexend_700Bold' },
   submitButton: {
-    backgroundColor: '#FFB6C1', borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 24,
+    backgroundColor: TAN, borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 24,
   },
-  submitText: { fontSize: 16, fontWeight: '700', color: '#3D2B1F' },
+  submitText: { fontFamily: 'Lexend_700Bold', fontSize: 16, color: RUST_DARK },
 });

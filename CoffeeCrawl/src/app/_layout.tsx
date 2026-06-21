@@ -102,6 +102,10 @@ if (loading || !fontsLoaded) return null;
         name="index"
         options={{ href: null }}
       />
+      <Tabs.Screen
+        name="post"
+        options={{ href: null }}
+      />
     </Tabs>
   );
 }

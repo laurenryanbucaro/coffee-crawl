@@ -8,6 +8,12 @@ import { supabase } from '../../../lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 
 const GOOGLE_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY;
+const RUST = '#8C3235';
+const RUST_DARK = '#672427';
+const TAN = '#DCCAB4';
+const ESPRESSO = '#A36054';
+const TEXT_LIGHT = '#E8DCC6';
+const PINK = '#672427';
 
 export default function ShopDetailScreen() {
   const { id, name, address, rating } = useLocalSearchParams();
@@ -24,10 +30,14 @@ export default function ShopDetailScreen() {
   const [shopDetails, setShopDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(true);
   const [existingRatingId, setExistingRatingId] = useState(null);
+  const [isWantToTry, setIsWantToTry] = useState(false);
+  const [wantToTryId, setWantToTryId] = useState(null);
+  const [savingWantToTry, setSavingWantToTry] = useState(false);
 
   useEffect(() => {
     fetchShopDetails();
     loadExistingRating();
+    loadWantToTryStatus();
   }, []);
 
   async function fetchShopDetails() {
@@ -54,12 +64,11 @@ export default function ShopDetailScreen() {
     }
   }
 
-async function loadExistingRating() {
+  async function loadExistingRating() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Try finding shop by google_place_id first
       let shopData = null;
       const { data: byPlaceId } = await supabase
         .from('shops')
@@ -69,7 +78,6 @@ async function loadExistingRating() {
 
       shopData = byPlaceId;
 
-      // If not found, try by UUID directly
       if (!shopData) {
         const { data: byId } = await supabase
           .from('shops')
@@ -97,6 +105,60 @@ async function loadExistingRating() {
       }
     } catch (e) {
       console.error('Load rating error:', e);
+    }
+  }
+
+ async function loadWantToTryStatus() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !name) return;
+      const { data } = await supabase
+        .from('want_to_try')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('shop_name', name)
+        .eq('shop_address', address)
+        .maybeSingle();
+      if (data) {
+        setIsWantToTry(true);
+        setWantToTryId(data.id);
+      } else {
+        setIsWantToTry(false);
+        setWantToTryId(null);
+      }
+    } catch (e) {
+      console.error('Want to try status error:', e);
+    }
+  }
+
+  async function handleToggleWantToTry() {
+    setSavingWantToTry(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Not logged in', 'Please log in to save shops.');
+        setSavingWantToTry(false);
+        return;
+      }
+
+      if (isWantToTry && wantToTryId) {
+        await supabase.from('want_to_try').delete().eq('id', wantToTryId);
+        setIsWantToTry(false);
+        setWantToTryId(null);
+      } else {
+        const { data, error } = await supabase
+          .from('want_to_try')
+          .insert({ user_id: user.id, shop_name: name, shop_address: address })
+          .select('id')
+          .single();
+        if (error) throw error;
+        setIsWantToTry(true);
+        setWantToTryId(data.id);
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Could not update your list. Please try again.');
+    } finally {
+      setSavingWantToTry(false);
     }
   }
 
@@ -216,6 +278,13 @@ async function loadExistingRating() {
         });
       }
 
+      // Remove from want to try since they've now rated it
+      if (isWantToTry && wantToTryId) {
+        await supabase.from('want_to_try').delete().eq('id', wantToTryId);
+        setIsWantToTry(false);
+        setWantToTryId(null);
+      }
+
       setSubmitted(true);
       setShowRatingModal(false);
       Alert.alert(
@@ -328,7 +397,7 @@ async function loadExistingRating() {
         </View>
 
         {loadingDetails ? (
-          <ActivityIndicator size="small" color="#FFB6C1" style={{ marginTop: 12 }} />
+          <ActivityIndicator size="small" color={PINK} style={{ marginTop: 12 }} />
         ) : shopDetails?.websiteUri ? (
           <TouchableOpacity
             style={styles.websiteButton}
@@ -339,6 +408,7 @@ async function loadExistingRating() {
         ) : null}
       </View>
 
+      {/* User Rating / Want to Try section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Your Rating</Text>
         {submitted ? (
@@ -369,9 +439,24 @@ async function loadExistingRating() {
             </View>
           </View>
         ) : (
-          <TouchableOpacity style={styles.rateButton} onPress={() => setShowRatingModal(true)}>
-            <Text style={styles.rateButtonText}>Rate this shop</Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity style={styles.rateButton} onPress={() => setShowRatingModal(true)}>
+              <Text style={styles.rateButtonText}>Rate this shop</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.wantToTryButton, isWantToTry && styles.wantToTryButtonActive]}
+              onPress={handleToggleWantToTry}
+              disabled={savingWantToTry}
+            >
+              {savingWantToTry ? (
+                <ActivityIndicator color={isWantToTry ? TEXT_LIGHT : RUST_DARK} />
+              ) : (
+                <Text style={[styles.wantToTryText, isWantToTry && styles.wantToTryTextActive]}>
+                  {isWantToTry ? '✓ On your Want to Try list' : '+ Want to Try'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </>
         )}
       </View>
 
@@ -399,7 +484,7 @@ async function loadExistingRating() {
             <TextInput
               style={styles.input}
               placeholder="e.g. Iced oat latte"
-              placeholderTextColor="#C4B09A"
+              placeholderTextColor={ESPRESSO}
               value={drinkOrdered}
               onChangeText={setDrinkOrdered}
             />
@@ -408,7 +493,7 @@ async function loadExistingRating() {
             <TextInput
               style={[styles.input, styles.inputMulti]}
               placeholder="What did you think?"
-              placeholderTextColor="#C4B09A"
+              placeholderTextColor={ESPRESSO}
               value={note}
               onChangeText={setNote}
               multiline
@@ -421,7 +506,7 @@ async function loadExistingRating() {
               disabled={uploadingPhoto}
             >
               {uploadingPhoto ? (
-                <ActivityIndicator color="#A89880" />
+                <ActivityIndicator color={RUST_DARK} />
               ) : (
                 <Text style={styles.photoPickerText}>
                   {photos.length > 0 ? `${photos.length} photo${photos.length > 1 ? 's' : ''} added` : '+ Add photos'}
@@ -458,7 +543,7 @@ async function loadExistingRating() {
                 disabled={saving}
               >
                 {saving ? (
-                  <ActivityIndicator color="#FFF8F9" />
+                  <ActivityIndicator color={TEXT_LIGHT} />
                 ) : (
                   <Text style={styles.modalSubmitText}>Save Rating</Text>
                 )}
@@ -472,123 +557,138 @@ async function loadExistingRating() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#A89880' },
+  container: { flex: 1, backgroundColor: RUST },
   header: { padding: 16, paddingTop: 56 },
   backButton: { alignSelf: 'flex-start' },
-  backText: { color: '#FFF8F9', fontSize: 16, fontWeight: '600' },
+  backText: { fontFamily: 'Lexend_700Bold', color: TEXT_LIGHT, fontSize: 16 },
   shopCard: {
     margin: 16,
-    backgroundColor: '#9A8870',
+    backgroundColor: RUST_DARK,
     borderRadius: 16,
     padding: 20,
   },
-  shopName: { fontSize: 22, fontWeight: '700', color: '#FFF8F9', marginBottom: 6 },
-  shopAddress: { fontSize: 14, color: '#F0E8E0', marginBottom: 12 },
+  shopName: { fontFamily: 'Modak_400Regular', fontSize: 24, color: TEXT_LIGHT, marginBottom: 6 },
+  shopAddress: { fontFamily: 'Lexend_400Regular', fontSize: 14, color: TAN, marginBottom: 12 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   badge: {
-    backgroundColor: '#FFB6C1',
+    backgroundColor: ESPRESSO,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  badgeText: { fontSize: 12, color: '#3D2B1F', fontWeight: '600' },
+  badgeText: { fontFamily: 'Lexend_600SemiBold', fontSize: 12, color: TEXT_LIGHT },
   websiteButton: {
-    backgroundColor: '#3D2B1F',
+    backgroundColor: ESPRESSO,
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 8,
     alignSelf: 'flex-start',
   },
-  websiteText: { fontSize: 13, color: '#FFF8F9', fontWeight: '600' },
+  websiteText: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: TEXT_LIGHT },
   section: { margin: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#FFF8F9', marginBottom: 12 },
+  sectionTitle: { fontFamily: 'Modak_400Regular', fontSize: 18, color: TEXT_LIGHT, marginBottom: 12 },
   rateButton: {
-    backgroundColor: '#FFB6C1',
+    backgroundColor: PINK,
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
   },
-  rateButtonText: { fontSize: 15, fontWeight: '600', color: '#3D2B1F' },
+  rateButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 15, color: TEXT_LIGHT },
+  wantToTryButton: {
+    backgroundColor: TAN,
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    marginTop: 10,
+    borderWidth: 1.5,
+    borderColor: ESPRESSO,
+  },
+  wantToTryButtonActive: {
+    backgroundColor: ESPRESSO,
+    borderColor: ESPRESSO,
+  },
+  wantToTryText: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: RUST_DARK },
+  wantToTryTextActive: { color: TEXT_LIGHT },
   submittedBox: {
-    backgroundColor: '#9A8870',
+    backgroundColor: RUST_DARK,
     borderRadius: 12,
     padding: 16,
   },
-  submittedScore: { fontSize: 32, fontWeight: '700', color: '#FFF8F9', marginBottom: 4 },
-  submittedDrink: { fontSize: 14, color: '#F0E8E0', marginBottom: 4 },
-  submittedNote: { fontSize: 13, color: '#FFE8EC', fontStyle: 'italic', marginBottom: 12 },
+  submittedScore: { fontFamily: 'Modak_400Regular', fontSize: 32, color: TEXT_LIGHT, marginBottom: 4 },
+  submittedDrink: { fontFamily: 'Lexend_500Medium', fontSize: 14, color: TAN, marginBottom: 4 },
+  submittedNote: { fontFamily: 'Lexend_400Regular', fontSize: 13, color: TAN, fontStyle: 'italic', marginBottom: 12 },
   photoThumb: { width: 70, height: 70, borderRadius: 8, marginRight: 8 },
   ratingActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
   editButton: {
-    backgroundColor: '#FFB6C1',
+    backgroundColor: PINK,
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  editButtonText: { fontSize: 13, color: '#3D2B1F', fontWeight: '600' },
+  editButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: RUST_DARK },
   deleteButton: {
-    backgroundColor: '#3D2B1F',
+    backgroundColor: ESPRESSO,
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  deleteButtonText: { fontSize: 13, color: '#FFB6C1', fontWeight: '600' },
+  deleteButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: TEXT_LIGHT },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   modalScroll: {
-    backgroundColor: '#FFF8F9',
+    backgroundColor: TAN,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '90%',
   },
   modalBox: { padding: 24, paddingBottom: 40 },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: '#3D2B1F', marginBottom: 16 },
-  modalLabel: { fontSize: 13, fontWeight: '600', color: '#A89880', marginBottom: 8, marginTop: 12 },
+  modalTitle: { fontFamily: 'Modak_400Regular', fontSize: 20, color: RUST, marginBottom: 16 },
+  modalLabel: { fontFamily: 'Lexend_600SemiBold', fontSize: 13, color: RUST_DARK, marginBottom: 8, marginTop: 12 },
   scoreRow: { flexDirection: 'row', gap: 12 },
   scoreBtn: {
     flex: 1, height: 48, borderRadius: 10,
-    borderWidth: 1.5, borderColor: '#D8C4B8',
+    borderWidth: 1.5, borderColor: ESPRESSO,
     alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#FFB6C1',
+    backgroundColor: '#FFFBF2',
   },
-  scoreBtnActive: { backgroundColor: '#A89880', borderColor: '#A89880' },
-  scoreBtnText: { fontSize: 16, fontWeight: '600', color: '#3D2B1F' },
-  scoreBtnTextActive: { color: '#FFF8F9' },
+  scoreBtnActive: { backgroundColor: RUST, borderColor: RUST },
+  scoreBtnText: { fontFamily: 'Lexend_700Bold', fontSize: 16, color: RUST_DARK },
+  scoreBtnTextActive: { color: TEXT_LIGHT },
   input: {
-    borderWidth: 1, borderColor: '#D8C4B8',
+    borderWidth: 1, borderColor: ESPRESSO,
     borderRadius: 10, padding: 12,
-    fontSize: 14, color: '#3D2B1F',
-    backgroundColor: '#FFF0F2',
+    fontFamily: 'Lexend_400Regular', fontSize: 14, color: RUST_DARK,
+    backgroundColor: '#FFFBF2',
   },
   inputMulti: { height: 80, textAlignVertical: 'top' },
   photoPickerButton: {
-    borderWidth: 1.5, borderColor: '#D8C4B8',
+    borderWidth: 1.5, borderColor: ESPRESSO,
     borderStyle: 'dashed', borderRadius: 10,
     padding: 14, alignItems: 'center',
-    backgroundColor: '#FFF0F2',
+    backgroundColor: '#FFFBF2',
   },
-  photoPickerText: { fontSize: 14, color: '#A89880', fontWeight: '500' },
+  photoPickerText: { fontFamily: 'Lexend_500Medium', fontSize: 14, color: RUST_DARK },
   photoPreviewWrap: { position: 'relative', marginRight: 8 },
   photoPreview: { width: 80, height: 80, borderRadius: 10 },
   photoRemove: {
     position: 'absolute', top: -6, right: -6,
-    backgroundColor: '#3D2B1F', borderRadius: 10,
+    backgroundColor: ESPRESSO, borderRadius: 10,
     width: 20, height: 20,
     alignItems: 'center', justifyContent: 'center',
   },
-  photoRemoveText: { color: '#FFF8F9', fontSize: 10, fontWeight: '700' },
+  photoRemoveText: { color: TEXT_LIGHT, fontSize: 10, fontFamily: 'Lexend_700Bold' },
   modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 },
   modalCancel: {
     flex: 1, marginRight: 8, padding: 14,
-    borderRadius: 12, backgroundColor: '#F0E8E0', alignItems: 'center',
+    borderRadius: 12, backgroundColor: '#C9AD7E', alignItems: 'center',
   },
-  modalCancelText: { color: '#A89880', fontWeight: '600' },
+  modalCancelText: { fontFamily: 'Lexend_700Bold', color: RUST_DARK },
   modalSubmit: {
     flex: 1, marginLeft: 8, padding: 14,
-    borderRadius: 12, backgroundColor: '#A89880', alignItems: 'center',
+    borderRadius: 12, backgroundColor: RUST, alignItems: 'center',
   },
-  modalSubmitText: { color: '#FFF8F9', fontWeight: '600' },
+  modalSubmitText: { fontFamily: 'Lexend_700Bold', color: TEXT_LIGHT },
 });

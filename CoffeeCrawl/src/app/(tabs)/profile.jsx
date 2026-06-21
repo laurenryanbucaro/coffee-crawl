@@ -7,6 +7,12 @@ import { supabase } from '../../../lib/supabase';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 
+const RUST = '#8C3235';
+const RUST_DARK = '#672427';
+const TAN = '#DCCAB4';
+const ESPRESSO = '#A36054';
+const TEXT_LIGHT = '#E8DCC6';
+
 export default function ProfileScreen() {
   const [profile, setProfile] = useState(null);
   const [ratings, setRatings] = useState([]);
@@ -26,6 +32,9 @@ export default function ProfileScreen() {
   const [newDisplayName, setNewDisplayName] = useState('');
   const [newUsername, setNewUsername] = useState('');
   const [activeTab, setActiveTab] = useState('top');
+  const [showAccountInfo, setShowAccountInfo] = useState(false);
+  const [accountEmail, setAccountEmail] = useState('');
+  const [joinDate, setJoinDate] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -37,6 +46,8 @@ export default function ProfileScreen() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      setAccountEmail(user.email || '');
+      setJoinDate(user.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '');
       const { data: profileData } = await supabase
         .from('users').select('*').eq('id', user.id).single();
       const { data: ratingsData } = await supabase
@@ -49,7 +60,6 @@ export default function ProfileScreen() {
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }
-
   async function loadWantToTry() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -137,19 +147,19 @@ export default function ProfileScreen() {
   }
 
   function getCrawlLevel(count) {
-    if (count >= 100) return { title: 'Crawl Legend', color: '#FFB6C1' };
-    if (count >= 50) return { title: 'Head Roaster', color: '#FFB6C1' };
-    if (count >= 30) return { title: 'Coffee Snob', color: '#FFB6C1' };
-    if (count >= 15) return { title: 'Buzz Chaser', color: '#FFB6C1' };
-    if (count >= 5) return { title: 'First Sip', color: '#FFB6C1' };
-    return { title: 'Coffee Virgin', color: '#FFB6C1' };
+    if (count >= 100) return { title: 'Crawl Legend' };
+    if (count >= 50) return { title: 'Head Roaster' };
+    if (count >= 30) return { title: 'Coffee Snob' };
+    if (count >= 15) return { title: 'Buzz Chaser' };
+    if (count >= 5) return { title: 'First Sip' };
+    return { title: 'Coffee Virgin' };
   }
 
   function getBestRating() { return ratings.length === 0 ? null : ratings[0]; }
   function getTopShops() { return ratings.slice(0, 5); }
 
   if (loading) {
-    return <View style={styles.centered}><ActivityIndicator size="large" color="#D8AA84" /></View>;
+    return <View style={styles.centered}><ActivityIndicator size="large" color={TAN} /></View>;
   }
 
   const topShops = getTopShops();
@@ -160,9 +170,26 @@ export default function ProfileScreen() {
     <ScrollView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        <TouchableOpacity style={styles.menuIcon} onPress={() => setShowAccountInfo(!showAccountInfo)}>
+          <View style={styles.menuLine} />
+          <View style={styles.menuLine} />
+          <View style={styles.menuLine} />
+        </TouchableOpacity>
+
+        {showAccountInfo && (
+          <View style={styles.accountInfoBox}>
+            <Text style={styles.accountInfoLabel}>Email</Text>
+            <Text style={styles.accountInfoValue}>{accountEmail}</Text>
+            <Text style={styles.accountInfoLabel}>Member since</Text>
+            <Text style={styles.accountInfoValue}>{joinDate}</Text>
+            <Text style={styles.accountInfoLabel}>User ID</Text>
+            <Text style={styles.accountInfoValue} numberOfLines={1}>{profile?.id}</Text>
+          </View>
+        )}
+
         <TouchableOpacity style={styles.avatarWrap} onPress={handlePickPhoto} disabled={uploadingPhoto}>
           {uploadingPhoto ? (
-            <View style={styles.avatar}><ActivityIndicator color="#A89880" /></View>
+            <View style={styles.avatar}><ActivityIndicator color={RUST} /></View>
           ) : profile?.avatar_url ? (
             <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
           ) : (
@@ -186,7 +213,7 @@ export default function ProfileScreen() {
       </View>
 
       {/* Crawl Level */}
-      <View style={[styles.levelBadge, { backgroundColor: level.color }]}>
+      <View style={styles.levelBadge}>
         <Text style={styles.levelTitle}>{level.title}</Text>
         <Text style={styles.levelCount}>{ratings.length} ratings</Text>
       </View>
@@ -335,7 +362,7 @@ export default function ProfileScreen() {
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>Your signature drink</Text>
             <Text style={styles.modalSub}>What are you ordering right now?</Text>
-            <TextInput style={styles.input} placeholder="e.g. Iced brown sugar oat latte" placeholderTextColor="#C4B09A" value={newDrink} onChangeText={setNewDrink} autoFocus />
+            <TextInput style={styles.input} placeholder="e.g. Iced brown sugar oat latte" placeholderTextColor={ESPRESSO} value={newDrink} onChangeText={setNewDrink} autoFocus />
             <View style={styles.modalButtons}>
               <TouchableOpacity style={styles.modalCancel} onPress={() => setEditingDrink(false)}><Text style={styles.modalCancelText}>Cancel</Text></TouchableOpacity>
               <TouchableOpacity style={styles.modalSubmit} onPress={updateSignatureDrink}><Text style={styles.modalSubmitText}>Save</Text></TouchableOpacity>
@@ -350,9 +377,9 @@ export default function ProfileScreen() {
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>Edit Profile</Text>
             <Text style={styles.modalLabel}>Display name</Text>
-            <TextInput style={styles.input} placeholder="Your name" placeholderTextColor="#C4B09A" value={newDisplayName} onChangeText={setNewDisplayName} />
+            <TextInput style={styles.input} placeholder="Your name" placeholderTextColor={ESPRESSO} value={newDisplayName} onChangeText={setNewDisplayName} />
             <Text style={styles.modalLabel}>Username</Text>
-            <TextInput style={styles.input} placeholder="username" placeholderTextColor="#C4B09A" value={newUsername} onChangeText={setNewUsername} autoCapitalize="none" />
+            <TextInput style={styles.input} placeholder="username" placeholderTextColor={ESPRESSO} value={newUsername} onChangeText={setNewUsername} autoCapitalize="none" />
             <View style={styles.modalButtons}>
               <TouchableOpacity style={styles.modalCancel} onPress={() => setEditingProfile(false)}><Text style={styles.modalCancelText}>Cancel</Text></TouchableOpacity>
               <TouchableOpacity style={styles.modalSubmit} onPress={updateProfile}><Text style={styles.modalSubmitText}>Save</Text></TouchableOpacity>
@@ -367,9 +394,9 @@ export default function ProfileScreen() {
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>Add to Want to Try</Text>
             <Text style={styles.modalLabel}>Shop name</Text>
-            <TextInput style={styles.input} placeholder="e.g. Blue Bottle Coffee" placeholderTextColor="#C4B09A" value={newShopName} onChangeText={setNewShopName} />
+            <TextInput style={styles.input} placeholder="e.g. Blue Bottle Coffee" placeholderTextColor={ESPRESSO} value={newShopName} onChangeText={setNewShopName} />
             <Text style={styles.modalLabel}>Address (optional)</Text>
-            <TextInput style={styles.input} placeholder="e.g. 123 Main St" placeholderTextColor="#C4B09A" value={newShopAddress} onChangeText={setNewShopAddress} />
+            <TextInput style={styles.input} placeholder="e.g. 123 Main St" placeholderTextColor={ESPRESSO} value={newShopAddress} onChangeText={setNewShopAddress} />
             <View style={styles.modalButtons}>
               <TouchableOpacity style={styles.modalCancel} onPress={() => setShowAddWantToTry(false)}><Text style={styles.modalCancelText}>Cancel</Text></TouchableOpacity>
               <TouchableOpacity style={styles.modalSubmit} onPress={handleAddWantToTry}><Text style={styles.modalSubmitText}>Add</Text></TouchableOpacity>
@@ -387,7 +414,7 @@ export default function ProfileScreen() {
             <TextInput
               style={[styles.input, { height: 120, textAlignVertical: 'top' }]}
               placeholder="Describe your issue or feedback..."
-              placeholderTextColor="#C4B09A"
+              placeholderTextColor={ESPRESSO}
               value={supportMessage}
               onChangeText={setSupportMessage}
               multiline
@@ -404,66 +431,90 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#A89880' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#A89880' },
-  header: { alignItems: 'center', padding: 24, paddingTop: 40 },
-  avatarWrap: { alignItems: 'center', marginBottom: 12 },
-  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#FFB6C1', justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
+  container: { flex: 1, backgroundColor: RUST },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: RUST },
+header: { alignItems: 'center', padding: 24, paddingTop: 40, position: 'relative' },
+  menuIcon: {
+    position: 'absolute',
+    top: 44,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+    gap: 4,
+  },
+  menuLine: { width: 22, height: 2.5, backgroundColor: TEXT_LIGHT, borderRadius: 2 },
+  accountInfoBox: {
+    position: 'absolute',
+    top: 80,
+    right: 16,
+    backgroundColor: RUST_DARK,
+    borderRadius: 12,
+    padding: 16,
+    width: 220,
+    zIndex: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  accountInfoLabel: { fontFamily: 'Lexend_600SemiBold', fontSize: 11, color: TAN, marginTop: 8 },
+  accountInfoValue: { fontFamily: 'Lexend_400Regular', fontSize: 13, color: TEXT_LIGHT, marginTop: 2 },  avatarWrap: { alignItems: 'center', marginBottom: 12 },
+  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: TAN, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
   avatarImage: { width: 80, height: 80, borderRadius: 40, marginBottom: 4 },
-  avatarText: { fontSize: 28, fontWeight: '700', color: '#3D2B1F' },
-  editAvatarHint: { fontSize: 11, color: '#F0E8E0' },
-  displayName: { fontSize: 22, fontWeight: '700', color: '#FFF8F9', marginBottom: 2, textAlign: 'center' },
-  username: { fontSize: 14, color: '#F0E8E0', textAlign: 'center' },
-  editNameHint: { fontSize: 11, color: '#FFE8EC', textAlign: 'center', marginBottom: 16, marginTop: 2 },
-  signaturePill: { backgroundColor: '#FFB6C1', borderRadius: 20, paddingHorizontal: 20, paddingVertical: 10, alignItems: 'center' },
-  signatureLabel: { fontSize: 11, color: '#3D2B1F', marginBottom: 2 },
-  signatureDrink: { fontSize: 14, fontWeight: '600', color: '#3D2B1F' },
-  levelBadge: { alignSelf: 'center', borderRadius: 20, paddingHorizontal: 24, paddingVertical: 10, marginBottom: 16, alignItems: 'center' },
-  levelTitle: { fontSize: 15, fontWeight: '700', color: '#3D2B1F' },
-  levelCount: { fontSize: 11, color: '#3D2B1F', marginTop: 2 },
-  statsRow: { flexDirection: 'row', backgroundColor: '#9A8870', marginHorizontal: 16, borderRadius: 16, padding: 16, marginBottom: 16 },
+  avatarText: { fontFamily: 'Modak_400Regular', fontSize: 28, color: RUST },
+  editAvatarHint: { fontFamily: 'Lexend_400Regular', fontSize: 11, color: TEXT_LIGHT },
+  displayName: { fontFamily: 'Modak_400Regular', fontSize: 24, color: TEXT_LIGHT, marginBottom: 2, textAlign: 'center' },
+  username: { fontFamily: 'Lexend_500Medium', fontSize: 14, color: TAN, textAlign: 'center' },
+  editNameHint: { fontFamily: 'Lexend_400Regular', fontSize: 11, color: TAN, textAlign: 'center', marginBottom: 16, marginTop: 2 },
+  signaturePill: { backgroundColor: TAN, borderRadius: 20, paddingHorizontal: 20, paddingVertical: 10, alignItems: 'center' },
+  signatureLabel: { fontFamily: 'Lexend_400Regular', fontSize: 11, color: RUST_DARK, marginBottom: 2 },
+  signatureDrink: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: RUST_DARK },
+  levelBadge: { alignSelf: 'center', backgroundColor: TAN, borderRadius: 20, paddingHorizontal: 24, paddingVertical: 10, marginBottom: 16, alignItems: 'center' },
+  levelTitle: { fontFamily: 'Modak_400Regular', fontSize: 16, color: RUST },
+  levelCount: { fontFamily: 'Lexend_500Medium', fontSize: 11, color: RUST_DARK, marginTop: 2 },
+  statsRow: { flexDirection: 'row', backgroundColor: RUST_DARK, marginHorizontal: 16, borderRadius: 16, padding: 16, marginBottom: 16 },
   stat: { flex: 1, alignItems: 'center' },
-  statNum: { fontSize: 22, fontWeight: '700', color: '#FFF8F9', textAlign: 'center' },
-  statLabel: { fontSize: 11, color: '#F0E8E0', marginTop: 2, textAlign: 'center' },
-  statShop: { fontSize: 10, color: '#FFE8EC', marginTop: 2, textAlign: 'center' },
-  statDivider: { width: 1, backgroundColor: '#C4B09A' },
-  tabRow: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 12, backgroundColor: '#9A8870', borderRadius: 12, padding: 4 },
+  statNum: { fontFamily: 'Modak_400Regular', fontSize: 22, color: TEXT_LIGHT, textAlign: 'center' },
+  statLabel: { fontFamily: 'Lexend_400Regular', fontSize: 11, color: TAN, marginTop: 2, textAlign: 'center' },
+  statShop: { fontFamily: 'Lexend_400Regular', fontSize: 10, color: TAN, marginTop: 2, textAlign: 'center' },
+  statDivider: { width: 1, backgroundColor: ESPRESSO },
+  tabRow: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 12, backgroundColor: RUST_DARK, borderRadius: 12, padding: 4 },
   tabBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center' },
-  tabBtnActive: { backgroundColor: '#FFB6C1' },
-  tabBtnText: { fontSize: 12, fontWeight: '600', color: '#F0E8E0' },
-  tabBtnTextActive: { color: '#3D2B1F' },
+  tabBtnActive: { backgroundColor: TAN },
+  tabBtnText: { fontFamily: 'Lexend_600SemiBold', fontSize: 12, color: TAN },
+  tabBtnTextActive: { color: RUST_DARK },
   section: { marginHorizontal: 16, marginBottom: 24 },
-  shopRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#9A8870', borderRadius: 12, padding: 12, marginBottom: 8 },
-  shopRank: { fontSize: 13, fontWeight: '700', color: '#F0E8E0', width: 28 },
+  shopRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: RUST_DARK, borderRadius: 12, padding: 12, marginBottom: 8 },
+  shopRank: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: TAN, width: 28 },
   shopInfo: { flex: 1 },
-  shopName: { fontSize: 14, fontWeight: '600', color: '#FFF8F9' },
-  shopDrink: { fontSize: 12, color: '#F0E8E0', marginTop: 2 },
-  ratingNote: { fontSize: 11, color: '#FFE8EC', fontStyle: 'italic', marginTop: 2 },
-  scoreBadge: { backgroundColor: '#FFB6C1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
-  scoreText: { fontSize: 14, fontWeight: '700', color: '#3D2B1F' },
-  wttRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#9A8870', borderRadius: 12, padding: 12, marginBottom: 8 },
-  removeBtn: { backgroundColor: '#3D2B1F', borderRadius: 8, width: 28, height: 28, justifyContent: 'center', alignItems: 'center' },
-  removeBtnText: { color: '#FFB6C1', fontSize: 12, fontWeight: '700' },
-  addWttButton: { backgroundColor: '#FFB6C1', borderRadius: 12, padding: 12, alignItems: 'center', marginBottom: 12 },
-  addWttText: { fontSize: 14, fontWeight: '600', color: '#3D2B1F' },
+  shopName: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: TEXT_LIGHT },
+  shopDrink: { fontFamily: 'Lexend_400Regular', fontSize: 12, color: TAN, marginTop: 2 },
+  ratingNote: { fontFamily: 'Lexend_400Regular', fontSize: 11, color: TAN, fontStyle: 'italic', marginTop: 2 },
+  scoreBadge: { backgroundColor: TAN, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  scoreText: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: RUST_DARK },
+  wttRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: RUST_DARK, borderRadius: 12, padding: 12, marginBottom: 8 },
+  removeBtn: { backgroundColor: ESPRESSO, borderRadius: 8, width: 28, height: 28, justifyContent: 'center', alignItems: 'center' },
+  removeBtnText: { color: TEXT_LIGHT, fontSize: 12, fontFamily: 'Lexend_700Bold' },
+  addWttButton: { backgroundColor: TAN, borderRadius: 12, padding: 12, alignItems: 'center', marginBottom: 12 },
+  addWttText: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: RUST_DARK },
   emptyState: { alignItems: 'center', padding: 24 },
-  emptyText: { fontSize: 15, color: '#F0E8E0', marginBottom: 8, textAlign: 'center' },
-  emptySubText: { fontSize: 12, color: '#F0E8E0', textAlign: 'center' },
-  mapButton: { backgroundColor: '#FFB6C1', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },
-  mapButtonText: { fontSize: 14, fontWeight: '600', color: '#3D2B1F' },
-  signOutButton: { margin: 16, marginBottom: 8, padding: 14, borderRadius: 12, backgroundColor: '#9A8870', alignItems: 'center' },
-  signOutText: { fontSize: 14, fontWeight: '600', color: '#FFE8EC' },
-  supportButton: { marginHorizontal: 16, marginBottom: 40, padding: 14, borderRadius: 12, backgroundColor: '#3D2B1F', alignItems: 'center' },
-  supportText: { fontSize: 14, fontWeight: '600', color: '#FFB6C1' },
+  emptyText: { fontFamily: 'Lexend_500Medium', fontSize: 15, color: TAN, marginBottom: 8, textAlign: 'center' },
+  emptySubText: { fontFamily: 'Lexend_400Regular', fontSize: 12, color: TAN, textAlign: 'center' },
+  mapButton: { backgroundColor: TAN, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },
+  mapButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: RUST_DARK },
+  signOutButton: { margin: 16, marginBottom: 8, padding: 14, borderRadius: 12, backgroundColor: RUST_DARK, alignItems: 'center' },
+  signOutText: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: TAN },
+  supportButton: { marginHorizontal: 16, marginBottom: 40, padding: 14, borderRadius: 12, backgroundColor: ESPRESSO, alignItems: 'center' },
+  supportText: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: TEXT_LIGHT },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalBox: { backgroundColor: '#FFF8F9', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: '#3D2B1F', marginBottom: 6 },
-  modalSub: { fontSize: 13, color: '#A89880', marginBottom: 16 },
-  modalLabel: { fontSize: 13, fontWeight: '600', color: '#A89880', marginBottom: 6, marginTop: 8 },
-  input: { borderWidth: 1, borderColor: '#D8C4B8', borderRadius: 10, padding: 12, fontSize: 14, color: '#3D2B1F', backgroundColor: '#FFF0F2', marginBottom: 8 },
+  modalBox: { backgroundColor: TAN, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
+  modalTitle: { fontFamily: 'Modak_400Regular', fontSize: 20, color: RUST, marginBottom: 6 },
+  modalSub: { fontFamily: 'Lexend_400Regular', fontSize: 13, color: ESPRESSO, marginBottom: 16 },
+  modalLabel: { fontFamily: 'Lexend_600SemiBold', fontSize: 13, color: RUST_DARK, marginBottom: 6, marginTop: 8 },
+  input: { borderWidth: 1, borderColor: ESPRESSO, borderRadius: 10, padding: 12, fontFamily: 'Lexend_400Regular', fontSize: 14, color: RUST_DARK, backgroundColor: '#FFFBF2', marginBottom: 8 },
   modalButtons: { flexDirection: 'row', marginTop: 12 },
-  modalCancel: { flex: 1, marginRight: 8, padding: 14, borderRadius: 12, backgroundColor: '#F0E8E0', alignItems: 'center' },
-  modalCancelText: { color: '#A89880', fontWeight: '600' },
-  modalSubmit: { flex: 1, marginLeft: 8, padding: 14, borderRadius: 12, backgroundColor: '#A89880', alignItems: 'center' },
-  modalSubmitText: { color: '#FFF8F9', fontWeight: '600' },
+  modalCancel: { flex: 1, marginRight: 8, padding: 14, borderRadius: 12, backgroundColor: '#C9AD7E', alignItems: 'center' },
+  modalCancelText: { fontFamily: 'Lexend_700Bold', color: RUST_DARK },
+  modalSubmit: { flex: 1, marginLeft: 8, padding: 14, borderRadius: 12, backgroundColor: RUST, alignItems: 'center' },
+  modalSubmitText: { fontFamily: 'Lexend_700Bold', color: TEXT_LIGHT },
 });

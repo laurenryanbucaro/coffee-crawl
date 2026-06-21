@@ -7,6 +7,12 @@ import { Video } from 'expo-av';
 import { supabase } from '../../../lib/supabase';
 import { useRouter } from 'expo-router';
 
+const RUST = '#8C3235';
+const RUST_DARK = '#672427';
+const TAN = '#DCCAB4';
+const ESPRESSO = '#A36054';
+const TEXT_LIGHT = '#E8DCC6';
+
 export default function FeedScreen() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +75,7 @@ export default function FeedScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#D8AA84" />
+        <ActivityIndicator size="large" color={TAN} />
       </View>
     );
   }
@@ -101,7 +107,7 @@ export default function FeedScreen() {
         data={posts}
         keyExtractor={(item) => item.id}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#D8AA84" />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={TAN} />
         }
         renderItem={({ item }) => {
           const photoUrls = item.posts?.[0]?.photo_urls || [];
@@ -110,7 +116,6 @@ export default function FeedScreen() {
 
           return (
             <View style={styles.card}>
-              {/* Header */}
               <View style={styles.cardHeader}>
                 <View style={styles.avatarWrap}>
                   {item.users?.avatar_url ? (
@@ -134,7 +139,6 @@ export default function FeedScreen() {
                 </View>
               </View>
 
-              {/* Media collage */}
               {hasMedia && (
                 <ScrollView
                   horizontal
@@ -159,7 +163,6 @@ export default function FeedScreen() {
                 </ScrollView>
               )}
 
-              {/* Shop info */}
               <TouchableOpacity
                 style={styles.shopInfo}
                 onPress={() => router.push({
@@ -175,7 +178,6 @@ export default function FeedScreen() {
                 <Text style={styles.shopAddress} numberOfLines={1}>{item.shops?.address}</Text>
               </TouchableOpacity>
 
-              {/* Drink and note */}
               {item.drink_ordered && (
                 <View style={styles.drinkPill}>
                   <Text style={styles.drinkText}>{item.drink_ordered}</Text>
@@ -193,31 +195,31 @@ export default function FeedScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#A89880' },
+  container: { flex: 1, backgroundColor: RUST },
   centered: {
     flex: 1, justifyContent: 'center', alignItems: 'center',
-    backgroundColor: '#A89880', padding: 24,
+    backgroundColor: RUST, padding: 24,
   },
   postButton: {
-    backgroundColor: '#FFB6C1',
+    backgroundColor: TAN,
     borderRadius: 14,
     margin: 16,
     marginBottom: 0,
     padding: 14,
     alignItems: 'center',
   },
-  postButtonText: { fontSize: 15, fontWeight: '700', color: '#3D2B1F' },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#FFF8F9', marginBottom: 8, marginTop: 24 },
-  emptySubtitle: { fontSize: 14, color: '#F0E8E0', textAlign: 'center', marginBottom: 24 },
+  postButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 15, color: RUST_DARK },
+  emptyTitle: { fontFamily: 'Modak_400Regular', fontSize: 22, color: TEXT_LIGHT, marginBottom: 8, marginTop: 24 },
+  emptySubtitle: { fontFamily: 'Lexend_400Regular', fontSize: 14, color: TAN, textAlign: 'center', marginBottom: 24 },
   findFriendsButton: {
-    backgroundColor: '#FFF0F2',
+    backgroundColor: TAN,
     borderRadius: 12,
     paddingHorizontal: 24,
     paddingVertical: 12,
   },
-  findFriendsText: { fontSize: 14, fontWeight: '600', color: '#A89880' },
+  findFriendsText: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: RUST_DARK },
   card: {
-    backgroundColor: '#9A8870',
+    backgroundColor: RUST_DARK,
     marginHorizontal: 16,
     marginTop: 12,
     borderRadius: 16,
@@ -233,20 +235,20 @@ const styles = StyleSheet.create({
   avatar: { width: 40, height: 40, borderRadius: 20 },
   avatarPlaceholder: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: '#FFF0F2',
+    backgroundColor: TAN,
     justifyContent: 'center', alignItems: 'center',
   },
-  avatarText: { fontSize: 16, fontWeight: '700', color: '#A89880' },
+  avatarText: { fontFamily: 'Modak_400Regular', fontSize: 16, color: RUST },
   headerInfo: { flex: 1 },
-  displayName: { fontSize: 14, fontWeight: '600', color: '#FFF8F9' },
-  meta: { fontSize: 12, color: '#F0E8E0', marginTop: 1 },
+  displayName: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: TEXT_LIGHT },
+  meta: { fontFamily: 'Lexend_400Regular', fontSize: 12, color: TAN, marginTop: 1 },
   scoreBadge: {
-    backgroundColor: '#FFF0F2',
+    backgroundColor: TAN,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  scoreText: { fontSize: 14, fontWeight: '700', color: '#A89880' },
+  scoreText: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: RUST_DARK },
   photoScroll: { marginBottom: 2 },
   photo: {
     width: 260,
@@ -254,26 +256,27 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   shopInfo: {
-    backgroundColor: '#A89880',
+    backgroundColor: RUST,
     marginHorizontal: 14,
     marginVertical: 10,
     borderRadius: 10,
     padding: 10,
   },
-  shopName: { fontSize: 14, fontWeight: '600', color: '#FFF8F9' },
-  shopAddress: { fontSize: 12, color: '#F0E8E0', marginTop: 2 },
+  shopName: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: TEXT_LIGHT },
+  shopAddress: { fontFamily: 'Lexend_400Regular', fontSize: 12, color: TAN, marginTop: 2 },
   drinkPill: {
     alignSelf: 'flex-start',
-    backgroundColor: '#FFF0F2',
+    backgroundColor: TAN,
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 4,
     marginHorizontal: 14,
     marginBottom: 10,
   },
-  drinkText: { fontSize: 12, color: '#A89880', fontWeight: '500' },
+  drinkText: { fontFamily: 'Lexend_600SemiBold', fontSize: 12, color: RUST_DARK },
   note: {
-    fontSize: 13, color: '#FFE8EC',
+    fontFamily: 'Lexend_400Regular',
+    fontSize: 13, color: TAN,
     fontStyle: 'italic',
     marginHorizontal: 14,
     marginBottom: 14,

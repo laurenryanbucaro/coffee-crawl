@@ -5,6 +5,12 @@ import {
 } from 'react-native';
 import { supabase } from '../../../lib/supabase';
 
+const RUST = '#8C3235';
+const RUST_DARK = '#672427';
+const TAN = '#DCCAB4';
+const ESPRESSO = '#A36054';
+const TEXT_LIGHT = '#E8DCC6';
+
 export default function FriendsScreen() {
   const [userId, setUserId] = useState(null);
   const [following, setFollowing] = useState([]);
@@ -127,27 +133,25 @@ export default function FriendsScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#D8AA84" />
+        <ActivityIndicator size="large" color={TAN} />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {/* Search */}
       <View style={styles.searchWrap}>
         <TextInput
           style={styles.searchInput}
           placeholder="Search by name or username..."
-          placeholderTextColor="#C4B09A"
+          placeholderTextColor={ESPRESSO}
           value={searchQuery}
           onChangeText={handleSearch}
           autoCapitalize="none"
         />
-        {searching && <ActivityIndicator size="small" color="#A89880" style={styles.searchSpinner} />}
+        {searching && <ActivityIndicator size="small" color={RUST} style={styles.searchSpinner} />}
       </View>
 
-      {/* Search results */}
       {searchQuery.length > 1 && (
         <View style={styles.searchResults}>
           {searchResults.length === 0 && !searching ? (
@@ -160,7 +164,6 @@ export default function FriendsScreen() {
         </View>
       )}
 
-      {/* Tabs */}
       {searchQuery.length === 0 && (
         <>
           <View style={styles.tabs}>
@@ -218,66 +221,67 @@ export default function FriendsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#A89880' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#A89880' },
+  container: { flex: 1, backgroundColor: RUST },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: RUST },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     margin: 16,
-    backgroundColor: '#FFF0F2',
+    backgroundColor: TAN,
     borderRadius: 12,
     paddingHorizontal: 14,
   },
   searchInput: {
     flex: 1,
     paddingVertical: 12,
+    fontFamily: 'Lexend_400Regular',
     fontSize: 14,
-    color: '#3D2B1F',
+    color: RUST_DARK,
   },
   searchSpinner: { marginLeft: 8 },
   searchResults: {
     marginHorizontal: 16,
-    backgroundColor: '#9A8870',
+    backgroundColor: RUST_DARK,
     borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 8,
   },
-  noResults: { padding: 16, color: '#F0E8E0', fontSize: 14 },
+  noResults: { fontFamily: 'Lexend_400Regular', padding: 16, color: TAN, fontSize: 14 },
   tabs: {
     flexDirection: 'row',
     marginHorizontal: 16,
     marginBottom: 12,
-    backgroundColor: '#9A8870',
+    backgroundColor: RUST_DARK,
     borderRadius: 12,
     padding: 4,
   },
   tab: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center' },
-  tabActive: { backgroundColor: '#FFF0F2' },
-  tabText: { fontSize: 13, fontWeight: '600', color: '#F0E8E0' },
-  tabTextActive: { color: '#A89880' },
+  tabActive: { backgroundColor: TAN },
+  tabText: { fontFamily: 'Lexend_600SemiBold', fontSize: 13, color: TAN },
+  tabTextActive: { color: RUST_DARK },
   userCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 12,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#C4B09A',
+    borderBottomColor: ESPRESSO,
   },
   userLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   avatar: { width: 44, height: 44, borderRadius: 22, marginRight: 10 },
   avatarPlaceholder: {
     width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#FFF0F2',
+    backgroundColor: TAN,
     justifyContent: 'center', alignItems: 'center',
     marginRight: 10,
   },
-  avatarText: { fontSize: 16, fontWeight: '700', color: '#A89880' },
+  avatarText: { fontFamily: 'Modak_400Regular', fontSize: 16, color: RUST },
   userInfo: { flex: 1 },
-  displayName: { fontSize: 14, fontWeight: '600', color: '#FFF8F9' },
-  username: { fontSize: 12, color: '#F0E8E0', marginTop: 1 },
-  signatureDrink: { fontSize: 11, color: '#FFE8EC', marginTop: 2, fontStyle: 'italic' },
+  displayName: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: TEXT_LIGHT },
+  username: { fontFamily: 'Lexend_400Regular', fontSize: 12, color: TAN, marginTop: 1 },
+  signatureDrink: { fontFamily: 'Lexend_400Regular', fontSize: 11, color: TAN, marginTop: 2, fontStyle: 'italic' },
   followBtn: {
-    backgroundColor: '#FFF0F2',
+    backgroundColor: TAN,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 6,
@@ -285,11 +289,11 @@ const styles = StyleSheet.create({
   followingBtn: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#FFF0F2',
+    borderColor: TAN,
   },
-  followBtnText: { fontSize: 13, fontWeight: '600', color: '#A89880' },
-  followingBtnText: { color: '#FFF0F2' },
+  followBtnText: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: RUST_DARK },
+  followingBtnText: { color: TAN },
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  emptyText: { fontSize: 16, fontWeight: '600', color: '#FFF8F9', marginBottom: 8 },
-  emptySubtext: { fontSize: 13, color: '#F0E8E0' },
+  emptyText: { fontFamily: 'Modak_400Regular', fontSize: 18, color: TEXT_LIGHT, marginBottom: 8 },
+  emptySubtext: { fontFamily: 'Lexend_400Regular', fontSize: 13, color: TAN },
 });
