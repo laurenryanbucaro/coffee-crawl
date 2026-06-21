@@ -9,6 +9,11 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 
 const GOOGLE_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY;
+const RUST = '#8C3235';
+const RUST_DARK = '#672427';
+const TAN = '#DCCAB4';
+const ESPRESSO = '#A36054';
+const TEXT_LIGHT = '#E8DCC6';
 
 export default function MapScreen() {
   const [location, setLocation] = useState(null);
@@ -178,7 +183,6 @@ export default function MapScreen() {
                !name.includes('pizza');
       });
 
-      // Merge Supabase shops — avoid duplicates by name
       const googleNames = new Set(filteredGoogle.map(s => s.displayName?.text?.toLowerCase()));
       const uniqueSupabase = supabaseShops.filter(s =>
         !googleNames.has(s.displayName?.text?.toLowerCase())
@@ -310,7 +314,7 @@ export default function MapScreen() {
           </Text>
         </TouchableOpacity>
         {loading ? (
-          <ActivityIndicator size="small" color="#FFF8F9" />
+          <ActivityIndicator size="small" color={TAN} />
         ) : (
           <TouchableOpacity
             style={styles.searchHereButton}
@@ -398,14 +402,14 @@ export default function MapScreen() {
             <TextInput
               style={styles.input}
               placeholder="Shop name"
-              placeholderTextColor="#C4B09A"
+              placeholderTextColor="#A78355"
               value={newShopName}
               onChangeText={setNewShopName}
             />
             <TextInput
               style={styles.input}
               placeholder="Address"
-              placeholderTextColor="#C4B09A"
+              placeholderTextColor="#A78355"
               value={newShopAddress}
               onChangeText={setNewShopAddress}
             />
@@ -425,123 +429,126 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#A89880' },
-  map: { height: '45%' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#A89880' },
-  errorText: { color: '#FFF8F9', fontSize: 14 },
-  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  emptyText: { color: '#FFF8F9', fontSize: 14, textAlign: 'center' },
+  container: { flex: 1, backgroundColor: RUST },
+  map: { height: '42%' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: RUST },
+  errorText: { fontFamily: 'Lexend_500Medium', color: TEXT_LIGHT, fontSize: 14 },
+  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: RUST },
+  emptyText: { fontFamily: 'Lexend_500Medium', color: TEXT_LIGHT, fontSize: 14, textAlign: 'center' },
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: '#9A8870',
+    paddingVertical: 10,
+    backgroundColor: RUST,
   },
   sortButton: {
-    backgroundColor: '#FFF0F2',
+    backgroundColor: TAN,
     borderRadius: 20,
     paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingVertical: 7,
   },
-  sortButtonText: { fontSize: 13, color: '#A89880', fontWeight: '600' },
+  sortButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 12, color: RUST },
   searchHereButton: {
-    backgroundColor: '#3D2B1F',
+    backgroundColor: RUST_DARK,
     borderRadius: 20,
     paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingVertical: 7,
   },
-  searchHereText: { fontSize: 13, color: '#FFF8F9', fontWeight: '600' },
+  searchHereText: { fontFamily: 'Lexend_700Bold', fontSize: 12, color: TEXT_LIGHT },
   addButton: {
-    backgroundColor: '#FFF0F2',
+    backgroundColor: TAN,
     borderRadius: 20,
     paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingVertical: 7,
   },
-  addButtonText: { fontSize: 13, color: '#A89880', fontWeight: '600' },
+  addButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 12, color: RUST },
   dropdown: {
     position: 'absolute',
-    top: '47%',
+    top: '44%',
     left: 14,
-    backgroundColor: '#FFF8F9',
-    borderRadius: 10,
+    backgroundColor: TAN,
+    borderRadius: 12,
     zIndex: 999,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.15,
     shadowRadius: 6,
     elevation: 4,
+    overflow: 'hidden',
   },
-  dropdownItem: { padding: 12, borderBottomWidth: 0.5, borderBottomColor: '#F0E0E4' },
-  dropdownText: { fontSize: 14, color: '#A89880' },
-  dropdownActive: { fontWeight: '700', color: '#3D2B1F' },
-  list: { flex: 1 },
+  dropdownItem: { padding: 12, borderBottomWidth: 0.5, borderBottomColor: ESPRESSO },
+  dropdownText: { fontFamily: 'Lexend_500Medium', fontSize: 14, color: RUST_DARK },
+  dropdownActive: { fontFamily: 'Lexend_700Bold', color: RUST },
+  list: { flex: 1, backgroundColor: RUST },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 14,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#C4B09A',
-    backgroundColor: '#A89880',
+    marginHorizontal: 12,
+    marginTop: 8,
+    borderRadius: 14,
+    backgroundColor: TAN,
   },
   cardLeft: { flex: 1, marginRight: 10 },
-  cardName: { fontSize: 14, fontWeight: '600', color: '#FFF8F9' },
-  cardAddress: { fontSize: 12, color: '#F0E8E0', marginTop: 2 },
-  cardDist: { fontSize: 11, color: '#FFE8EC', marginTop: 2 },
-  cardManual: { fontSize: 10, color: '#D8AA84', marginTop: 2, fontStyle: 'italic' },
+  cardName: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: RUST_DARK },
+  cardAddress: { fontFamily: 'Lexend_400Regular', fontSize: 12, color: ESPRESSO, marginTop: 2 },
+  cardDist: { fontFamily: 'Lexend_400Regular', fontSize: 11, color: ESPRESSO, marginTop: 2 },
+  cardManual: { fontFamily: 'Lexend_600SemiBold', fontSize: 10, color: RUST, marginTop: 2, fontStyle: 'italic' },
   ratingBadge: {
-    backgroundColor: '#FFF0F2',
+    backgroundColor: RUST,
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  ratingText: { fontSize: 13, fontWeight: '700', color: '#A89880' },
+  ratingText: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: TEXT_LIGHT },
   pin: {
-    backgroundColor: '#FFF0F2',
+    backgroundColor: TAN,
     borderRadius: 20,
     padding: 5,
     borderWidth: 1.5,
-    borderColor: '#FFF8F9',
+    borderColor: RUST,
   },
   pinManual: {
-    backgroundColor: '#D8AA84',
-    borderColor: '#FFF8F9',
+    backgroundColor: RUST_DARK,
+    borderColor: TAN,
   },
   pinEmoji: { fontSize: 18 },
   callout: {
-    backgroundColor: '#FFF8F9',
+    backgroundColor: TAN,
     borderRadius: 10,
     padding: 10,
     width: 160,
   },
-  calloutName: { fontSize: 12, fontWeight: '600', color: '#3D2B1F' },
-  calloutManual: { fontSize: 10, color: '#D8AA84', marginTop: 1, fontStyle: 'italic' },
-  calloutRating: { fontSize: 11, color: '#A89880', marginTop: 2 },
-  calloutTap: { fontSize: 10, color: '#C4B09A', marginTop: 4, fontStyle: 'italic' },
+  calloutName: { fontFamily: 'Lexend_700Bold', fontSize: 12, color: RUST_DARK },
+  calloutManual: { fontFamily: 'Lexend_500Medium', fontSize: 10, color: RUST, marginTop: 1, fontStyle: 'italic' },
+  calloutRating: { fontFamily: 'Lexend_600SemiBold', fontSize: 11, color: RUST, marginTop: 2 },
+  calloutTap: { fontFamily: 'Lexend_400Regular', fontSize: 10, color: ESPRESSO, marginTop: 4, fontStyle: 'italic' },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalBox: {
-    backgroundColor: '#FFF8F9',
-    borderRadius: 16,
+    backgroundColor: TAN,
+    borderRadius: 18,
     padding: 24,
     width: '85%',
   },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: '#3D2B1F', marginBottom: 6 },
-  modalSub: { fontSize: 13, color: '#A89880', marginBottom: 16 },
+  modalTitle: { fontFamily: 'Modak_400Regular', fontSize: 22, color: RUST, marginBottom: 6 },
+  modalSub: { fontFamily: 'Lexend_400Regular', fontSize: 13, color: ESPRESSO, marginBottom: 16 },
   input: {
     borderWidth: 1,
-    borderColor: '#D8C4B8',
+    borderColor: ESPRESSO,
     borderRadius: 10,
     padding: 12,
+    fontFamily: 'Lexend_400Regular',
     fontSize: 14,
-    color: '#3D2B1F',
+    color: RUST_DARK,
     marginBottom: 12,
-    backgroundColor: '#FFF0F2',
+    backgroundColor: '#FFFBF2',
   },
   modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   modalCancel: {
@@ -549,17 +556,17 @@ const styles = StyleSheet.create({
     marginRight: 8,
     padding: 12,
     borderRadius: 10,
-    backgroundColor: '#F0E8E0',
+    backgroundColor: ESPRESSO,
     alignItems: 'center',
   },
-  modalCancelText: { color: '#A89880', fontWeight: '600' },
+  modalCancelText: { fontFamily: 'Lexend_700Bold', color: TEXT_LIGHT },
   modalSubmit: {
     flex: 1,
     marginLeft: 8,
     padding: 12,
     borderRadius: 10,
-    backgroundColor: '#A89880',
+    backgroundColor: RUST,
     alignItems: 'center',
   },
-  modalSubmitText: { color: '#FFF8F9', fontWeight: '600' },
+  modalSubmitText: { fontFamily: 'Lexend_700Bold', color: TEXT_LIGHT },
 });

@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, FlatList,
   ActivityIndicator, TouchableOpacity, RefreshControl, Image, ScrollView
 } from 'react-native';
+import { Video } from 'expo-av';
 import { supabase } from '../../../lib/supabase';
 import { useRouter } from 'expo-router';
 
@@ -29,14 +30,13 @@ export default function FeedScreen() {
       const followingIds = (following || []).map(f => f.following_id);
       followingIds.push(user.id);
 
-      // Get ratings with posts (photos) joined
       const { data: ratingsData } = await supabase
         .from('ratings')
         .select(`
           *,
           shops(name, address, google_place_id),
           users(display_name, username, avatar_url),
-          posts(photo_urls, caption)
+          posts(photo_urls, media_types, caption)
         `)
         .in('user_id', followingIds)
         .order('visited_at', { ascending: false })
@@ -77,6 +77,9 @@ export default function FeedScreen() {
   if (posts.length === 0) {
     return (
       <View style={styles.centered}>
+        <TouchableOpacity style={styles.postButton} onPress={() => router.push('/post')}>
+          <Text style={styles.postButtonText}>+ New Post</Text>
+        </TouchableOpacity>
         <Text style={styles.emptyTitle}>Your feed is empty</Text>
         <Text style={styles.emptySubtitle}>Rate a coffee shop or follow friends to see their crawls here</Text>
         <TouchableOpacity
@@ -91,6 +94,9 @@ export default function FeedScreen() {
 
   return (
     <View style={styles.container}>
+      <TouchableOpacity style={styles.postButton} onPress={() => router.push('/post')}>
+        <Text style={styles.postButtonText}>+ New Post</Text>
+      </TouchableOpacity>
       <FlatList
         data={posts}
         keyExtractor={(item) => item.id}
@@ -99,7 +105,8 @@ export default function FeedScreen() {
         }
         renderItem={({ item }) => {
           const photoUrls = item.posts?.[0]?.photo_urls || [];
-          const hasPhotos = photoUrls.length > 0;
+          const mediaTypes = item.posts?.[0]?.media_types || [];
+          const hasMedia = photoUrls.length > 0;
 
           return (
             <View style={styles.card}>
@@ -127,16 +134,28 @@ export default function FeedScreen() {
                 </View>
               </View>
 
-              {/* Photos collage */}
-              {hasPhotos && (
+              {/* Media collage */}
+              {hasMedia && (
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   style={styles.photoScroll}
                 >
-                  {photoUrls.map((url, i) => (
-                    <Image key={i} source={{ uri: url }} style={styles.photo} />
-                  ))}
+                  {photoUrls.map((url, i) => {
+                    const isVideo = mediaTypes[i] === 'video';
+                    return isVideo ? (
+                      <Video
+                        key={i}
+                        source={{ uri: url }}
+                        style={styles.photo}
+                        useNativeControls
+                        resizeMode="cover"
+                        isLooping
+                      />
+                    ) : (
+                      <Image key={i} source={{ uri: url }} style={styles.photo} />
+                    );
+                  })}
                 </ScrollView>
               )}
 
@@ -146,7 +165,7 @@ export default function FeedScreen() {
                 onPress={() => router.push({
                   pathname: '/shop/[id]',
                   params: {
-                    id: item.shop_id,
+                    id: item.shops?.google_place_id || item.shop_id,
                     name: item.shops?.name,
                     address: item.shops?.address,
                   }
@@ -179,7 +198,16 @@ const styles = StyleSheet.create({
     flex: 1, justifyContent: 'center', alignItems: 'center',
     backgroundColor: '#A89880', padding: 24,
   },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#FFF8F9', marginBottom: 8 },
+  postButton: {
+    backgroundColor: '#FFB6C1',
+    borderRadius: 14,
+    margin: 16,
+    marginBottom: 0,
+    padding: 14,
+    alignItems: 'center',
+  },
+  postButtonText: { fontSize: 15, fontWeight: '700', color: '#3D2B1F' },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#FFF8F9', marginBottom: 8, marginTop: 24 },
   emptySubtitle: { fontSize: 14, color: '#F0E8E0', textAlign: 'center', marginBottom: 24 },
   findFriendsButton: {
     backgroundColor: '#FFF0F2',
