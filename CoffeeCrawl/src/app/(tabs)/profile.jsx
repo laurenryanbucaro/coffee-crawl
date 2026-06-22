@@ -21,8 +21,6 @@ export default function ProfileScreen() {
   const [editingDrink, setEditingDrink] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [showAllRatings, setShowAllRatings] = useState(false);
-  const [showWantToTry, setShowWantToTry] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const [showAddWantToTry, setShowAddWantToTry] = useState(false);
   const [supportMessage, setSupportMessage] = useState('');
@@ -35,11 +33,17 @@ export default function ProfileScreen() {
   const [showAccountInfo, setShowAccountInfo] = useState(false);
   const [accountEmail, setAccountEmail] = useState('');
   const [joinDate, setJoinDate] = useState('');
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     loadProfile();
     loadWantToTry();
+    loadUnreadCount();
   }, []);
 
   async function loadProfile() {
@@ -60,6 +64,7 @@ export default function ProfileScreen() {
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }
+
   async function loadWantToTry() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -71,6 +76,50 @@ export default function ProfileScreen() {
         .order('created_at', { ascending: false });
       setWantToTry(data || []);
     } catch (e) { console.error(e); }
+  }
+
+  async function loadUnreadCount() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profileData } = await supabase
+        .from('users').select('last_checked_activity').eq('id', user.id).single();
+      const lastChecked = profileData?.last_checked_activity || new Date(0).toISOString();
+      const { data: following } = await supabase
+        .from('follows').select('following_id').eq('follower_id', user.id);
+      const followingIds = (following || []).map(f => f.following_id);
+      if (followingIds.length === 0) { setUnreadCount(0); return; }
+      const { count } = await supabase
+        .from('ratings')
+        .select('id', { count: 'exact', head: true })
+        .in('user_id', followingIds)
+        .gt('visited_at', lastChecked);
+      setUnreadCount(count || 0);
+    } catch (e) { console.error(e); }
+  }
+
+  async function loadNotifications() {
+    setLoadingNotifications(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: following } = await supabase
+        .from('follows').select('following_id').eq('follower_id', user.id);
+      const followingIds = (following || []).map(f => f.following_id);
+      if (followingIds.length === 0) { setNotifications([]); setLoadingNotifications(false); return; }
+      const { data } = await supabase
+        .from('ratings')
+        .select('*, shops(name, address, google_place_id), users(display_name, username, avatar_url)')
+        .in('user_id', followingIds)
+        .order('visited_at', { ascending: false })
+        .limit(30);
+      setNotifications(data || []);
+      await supabase.from('users')
+        .update({ last_checked_activity: new Date().toISOString() })
+        .eq('id', user.id);
+      setUnreadCount(0);
+    } catch (e) { console.error(e); }
+    finally { setLoadingNotifications(false); }
   }
 
   async function handlePickPhoto() {
@@ -155,6 +204,16 @@ export default function ProfileScreen() {
     return { title: 'Coffee Virgin' };
   }
 
+  function timeAgo(dateStr) {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diff = Math.floor((now - date) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+  }
+
   function getBestRating() { return ratings.length === 0 ? null : ratings[0]; }
   function getTopShops() { return ratings.slice(0, 5); }
 
@@ -176,6 +235,21 @@ export default function ProfileScreen() {
           <View style={styles.menuLine} />
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={styles.bellIcon}
+          onPress={() => {
+            setShowNotifications(true);
+            loadNotifications();
+          }}
+        >
+          <Text style={styles.bellEmoji}>🔔</Text>
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
         {showAccountInfo && (
           <View style={styles.accountInfoBox}>
             <Text style={styles.accountInfoLabel}>Email</Text>
@@ -184,6 +258,12 @@ export default function ProfileScreen() {
             <Text style={styles.accountInfoValue}>{joinDate}</Text>
             <Text style={styles.accountInfoLabel}>User ID</Text>
             <Text style={styles.accountInfoValue} numberOfLines={1}>{profile?.id}</Text>
+            <TouchableOpacity style={styles.mapPrefRow} onPress={() => setShowMapPicker(true)}>
+              <Text style={styles.accountInfoLabel}>Default Maps App</Text>
+              <Text style={styles.accountInfoValue}>
+                {profile?.default_map_app === 'google' ? 'Google Maps' : profile?.default_map_app === 'waze' ? 'Waze' : 'Apple Maps'} ›
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -265,11 +345,7 @@ export default function ProfileScreen() {
           {topShops.length > 0 ? topShops.map((r, i) => (
             <TouchableOpacity key={r.id} style={styles.shopRow} onPress={() => router.push({
               pathname: '/shop/[id]',
-              params: {
-                id: r.shops?.google_place_id || r.shop_id,
-                name: r.shops?.name,
-                address: r.shops?.address
-              }
+              params: { id: r.shops?.google_place_id || r.shop_id, name: r.shops?.name, address: r.shops?.address }
             })}>
               <Text style={styles.shopRank}>#{i + 1}</Text>
               <View style={styles.shopInfo}>
@@ -296,11 +372,7 @@ export default function ProfileScreen() {
           {ratings.length > 0 ? ratings.map((r, i) => (
             <TouchableOpacity key={r.id} style={styles.shopRow} onPress={() => router.push({
               pathname: '/shop/[id]',
-              params: {
-                id: r.shops?.google_place_id || r.shop_id,
-                name: r.shops?.name,
-                address: r.shops?.address
-              }
+              params: { id: r.shops?.google_place_id || r.shop_id, name: r.shops?.name, address: r.shops?.address }
             })}>
               <Text style={styles.shopRank}>#{i + 1}</Text>
               <View style={styles.shopInfo}>
@@ -356,6 +428,71 @@ export default function ProfileScreen() {
         <Text style={styles.supportText}>Contact Support</Text>
       </TouchableOpacity>
 
+      {/* Notifications modal */}
+      <Modal visible={showNotifications} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.notifBox}>
+            <View style={styles.notifHeader}>
+              <Text style={styles.modalTitle}>Activity</Text>
+              <TouchableOpacity onPress={() => setShowNotifications(false)}>
+                <Text style={styles.notifClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            {loadingNotifications ? (
+              <ActivityIndicator color={RUST} style={{ margin: 24 }} />
+            ) : notifications.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>No activity yet</Text>
+                <Text style={styles.emptySubText}>Follow friends to see their ratings here</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={notifications}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.notifRow}
+                    onPress={() => {
+                      setShowNotifications(false);
+                      router.push({
+                        pathname: '/shop/[id]',
+                        params: {
+                          id: item.shops?.google_place_id || item.shop_id,
+                          name: item.shops?.name,
+                          address: item.shops?.address,
+                        }
+                      });
+                    }}
+                  >
+                    {item.users?.avatar_url ? (
+                      <Image source={{ uri: item.users.avatar_url }} style={styles.notifAvatar} />
+                    ) : (
+                      <View style={styles.notifAvatarPlaceholder}>
+                        <Text style={styles.notifAvatarText}>{item.users?.display_name?.[0]?.toUpperCase() || '?'}</Text>
+                      </View>
+                    )}
+                    <View style={styles.notifContent}>
+                      <Text style={styles.notifText}>
+                        <Text style={styles.notifName}>{item.users?.display_name}</Text>
+                        {' rated '}
+                        <Text style={styles.notifShop}>{item.shops?.name}</Text>
+                      </Text>
+                      {item.drink_ordered && (
+                        <Text style={styles.notifDrink}>{item.drink_ordered}</Text>
+                      )}
+                      <Text style={styles.notifTime}>{timeAgo(item.visited_at)}</Text>
+                    </View>
+                    <View style={styles.notifScore}>
+                      <Text style={styles.notifScoreText}>{item.score}</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {/* Edit drink modal */}
       <Modal visible={editingDrink} transparent animationType="slide">
         <View style={styles.modalOverlay}>
@@ -405,6 +542,35 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
+      {/* Map preference modal */}
+      <Modal visible={showMapPicker} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Default Maps App</Text>
+            <Text style={styles.modalSub}>Choose which app opens for directions</Text>
+            {['apple', 'google', 'waze'].map(opt => (
+              <TouchableOpacity
+                key={opt}
+                style={styles.mapOptionRow}
+                onPress={async () => {
+                  await supabase.from('users').update({ default_map_app: opt }).eq('id', profile.id);
+                  setProfile({ ...profile, default_map_app: opt });
+                  setShowMapPicker(false);
+                }}
+              >
+                <Text style={styles.mapOptionText}>
+                  {opt === 'apple' ? 'Apple Maps' : opt === 'google' ? 'Google Maps' : 'Waze'}
+                </Text>
+                {profile?.default_map_app === opt && <Text style={styles.mapOptionCheck}>✓</Text>}
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowMapPicker(false)}>
+              <Text style={styles.modalCancelText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Support modal */}
       <Modal visible={showSupport} transparent animationType="slide">
         <View style={styles.modalOverlay}>
@@ -433,32 +599,39 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: RUST },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: RUST },
-header: { alignItems: 'center', padding: 24, paddingTop: 40, position: 'relative' },
+  header: { alignItems: 'center', padding: 24, paddingTop: 40, position: 'relative' },
   menuIcon: {
-    position: 'absolute',
-    top: 44,
-    right: 20,
-    zIndex: 10,
-    padding: 8,
-    gap: 4,
+    position: 'absolute', top: 44, left: 20, zIndex: 10, padding: 8, gap: 4,
   },
   menuLine: { width: 22, height: 2.5, backgroundColor: TEXT_LIGHT, borderRadius: 2 },
+  bellIcon: {
+    position: 'absolute', top: 44, right: 20, zIndex: 10, padding: 8,
+  },
+  bellEmoji: { fontSize: 22 },
+  badge: {
+    position: 'absolute', top: 4, right: 4,
+    backgroundColor: TAN, borderRadius: 10,
+    minWidth: 18, height: 18,
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: { fontFamily: 'Lexend_700Bold', fontSize: 10, color: RUST_DARK },
   accountInfoBox: {
-    position: 'absolute',
-    top: 80,
-    right: 16,
-    backgroundColor: RUST_DARK,
-    borderRadius: 12,
-    padding: 16,
-    width: 220,
-    zIndex: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
+    position: 'absolute', top: 80, left: 16,
+    backgroundColor: RUST_DARK, borderRadius: 12, padding: 16,
+    width: 220, zIndex: 20,
+    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, elevation: 6,
   },
   accountInfoLabel: { fontFamily: 'Lexend_600SemiBold', fontSize: 11, color: TAN, marginTop: 8 },
-  accountInfoValue: { fontFamily: 'Lexend_400Regular', fontSize: 13, color: TEXT_LIGHT, marginTop: 2 },  avatarWrap: { alignItems: 'center', marginBottom: 12 },
+  accountInfoValue: { fontFamily: 'Lexend_400Regular', fontSize: 13, color: TEXT_LIGHT, marginTop: 2 },
+  mapPrefRow: { marginTop: 8 },
+  mapOptionRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    padding: 14, backgroundColor: '#FFFBF2', borderRadius: 10, marginBottom: 8,
+  },
+  mapOptionText: { fontFamily: 'Lexend_600SemiBold', fontSize: 15, color: RUST_DARK },
+  mapOptionCheck: { fontFamily: 'Lexend_700Bold', fontSize: 16, color: RUST },
+  avatarWrap: { alignItems: 'center', marginBottom: 12 },
   avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: TAN, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
   avatarImage: { width: 80, height: 80, borderRadius: 40, marginBottom: 4 },
   avatarText: { fontFamily: 'Modak_400Regular', fontSize: 28, color: RUST },
@@ -506,6 +679,33 @@ header: { alignItems: 'center', padding: 24, paddingTop: 40, position: 'relative
   signOutText: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: TAN },
   supportButton: { marginHorizontal: 16, marginBottom: 40, padding: 14, borderRadius: 12, backgroundColor: ESPRESSO, alignItems: 'center' },
   supportText: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: TEXT_LIGHT },
+  notifBox: {
+    backgroundColor: TAN, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    maxHeight: '80%', marginTop: 'auto',
+  },
+  notifHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    padding: 20, paddingBottom: 12, borderBottomWidth: 0.5, borderBottomColor: ESPRESSO,
+  },
+  notifClose: { fontFamily: 'Lexend_700Bold', fontSize: 16, color: RUST_DARK },
+  notifRow: {
+    flexDirection: 'row', alignItems: 'center',
+    padding: 14, borderBottomWidth: 0.5, borderBottomColor: '#C9AD7E',
+  },
+  notifAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 10 },
+  notifAvatarPlaceholder: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: RUST,
+    justifyContent: 'center', alignItems: 'center', marginRight: 10,
+  },
+  notifAvatarText: { fontFamily: 'Modak_400Regular', fontSize: 16, color: TAN },
+  notifContent: { flex: 1 },
+  notifText: { fontFamily: 'Lexend_400Regular', fontSize: 13, color: RUST_DARK },
+  notifName: { fontFamily: 'Lexend_700Bold', color: RUST_DARK },
+  notifShop: { fontFamily: 'Lexend_600SemiBold', color: RUST },
+  notifDrink: { fontFamily: 'Lexend_400Regular', fontSize: 11, color: ESPRESSO, marginTop: 2, fontStyle: 'italic' },
+  notifTime: { fontFamily: 'Lexend_400Regular', fontSize: 10, color: ESPRESSO, marginTop: 3 },
+  notifScore: { backgroundColor: RUST, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginLeft: 8 },
+  notifScoreText: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: TEXT_LIGHT },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalBox: { backgroundColor: TAN, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
   modalTitle: { fontFamily: 'Modak_400Regular', fontSize: 20, color: RUST, marginBottom: 6 },

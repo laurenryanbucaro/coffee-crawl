@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, TextInput,
   TouchableOpacity, ActivityIndicator, Image, Alert
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 
 const RUST = '#8C3235';
@@ -12,6 +13,7 @@ const ESPRESSO = '#A36054';
 const TEXT_LIGHT = '#E8DCC6';
 
 export default function FriendsScreen() {
+  const router = useRouter();
   const [userId, setUserId] = useState(null);
   const [following, setFollowing] = useState([]);
   const [followers, setFollowers] = useState([]);
@@ -97,7 +99,7 @@ export default function FriendsScreen() {
   function UserCard({ user, showFollow = true }) {
     if (!user) return null;
     return (
-      <View style={styles.userCard}>
+      <TouchableOpacity style={styles.userCard} onPress={() => router.push(`/user/${user.id}`)}>
         <View style={styles.userLeft}>
           {user.avatar_url ? (
             <Image source={{ uri: user.avatar_url }} style={styles.avatar} />
@@ -119,14 +121,14 @@ export default function FriendsScreen() {
         {showFollow && user.id !== userId && (
           <TouchableOpacity
             style={[styles.followBtn, isFollowing(user.id) && styles.followingBtn]}
-            onPress={() => handleFollow(user.id)}
+            onPress={(e) => { e.stopPropagation(); handleFollow(user.id); }}
           >
             <Text style={[styles.followBtnText, isFollowing(user.id) && styles.followingBtnText]}>
               {isFollowing(user.id) ? 'Following' : 'Follow'}
             </Text>
           </TouchableOpacity>
         )}
-      </View>
+      </TouchableOpacity>
     );
   }
 

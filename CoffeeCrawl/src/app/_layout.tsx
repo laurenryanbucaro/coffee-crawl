@@ -10,7 +10,6 @@ export default function RootLayout() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const segments = useSegments();
-
   const [fontsLoaded] = useFonts({
     Modak_400Regular,
     Lexend_400Regular,
@@ -24,11 +23,9 @@ export default function RootLayout() {
       setSession(session);
       setLoading(false);
     });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
@@ -42,7 +39,8 @@ export default function RootLayout() {
     }
   }, [session, loading, segments]);
 
-if (loading || !fontsLoaded) return null;
+  if (loading || !fontsLoaded) return null;
+
   return (
     <Tabs
       screenOptions={{
@@ -104,6 +102,10 @@ if (loading || !fontsLoaded) return null;
       />
       <Tabs.Screen
         name="post"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="user/[id]"
         options={{ href: null }}
       />
     </Tabs>

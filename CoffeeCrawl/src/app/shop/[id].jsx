@@ -33,12 +33,40 @@ export default function ShopDetailScreen() {
   const [isWantToTry, setIsWantToTry] = useState(false);
   const [wantToTryId, setWantToTryId] = useState(null);
   const [savingWantToTry, setSavingWantToTry] = useState(false);
+  const [defaultMapApp, setDefaultMapApp] = useState('apple');
 
   useEffect(() => {
     fetchShopDetails();
     loadExistingRating();
     loadWantToTryStatus();
+    loadMapPreference();
   }, []);
+
+  async function loadMapPreference() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from('users').select('default_map_app').eq('id', user.id).single();
+      if (data?.default_map_app) setDefaultMapApp(data.default_map_app);
+    } catch (e) {
+      console.error('Map preference error:', e);
+    }
+  }
+
+  function handleGetDirections() {
+    const encodedAddress = encodeURIComponent(address);
+    let url;
+    if (defaultMapApp === 'google') {
+      url = `https://www.google.com/maps/dir/?api=1&destination=${encodedAddress}`;
+    } else if (defaultMapApp === 'waze') {
+      url = `https://waze.com/ul?q=${encodedAddress}&navigate=yes`;
+    } else {
+      url = `https://maps.apple.com/?daddr=${encodedAddress}`;
+    }
+    Linking.openURL(url).catch(() => {
+      Alert.alert('Error', 'Could not open maps app.');
+    });
+  }
 
   async function fetchShopDetails() {
     const isManual = !id || id.toString().startsWith('supabase-') ||
@@ -108,7 +136,7 @@ export default function ShopDetailScreen() {
     }
   }
 
- async function loadWantToTryStatus() {
+  async function loadWantToTryStatus() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !name) return;
@@ -278,7 +306,6 @@ export default function ShopDetailScreen() {
         });
       }
 
-      // Remove from want to try since they've now rated it
       if (isWantToTry && wantToTryId) {
         await supabase.from('want_to_try').delete().eq('id', wantToTryId);
         setIsWantToTry(false);
@@ -396,16 +423,21 @@ export default function ShopDetailScreen() {
           )}
         </View>
 
-        {loadingDetails ? (
-          <ActivityIndicator size="small" color={PINK} style={{ marginTop: 12 }} />
-        ) : shopDetails?.websiteUri ? (
-          <TouchableOpacity
-            style={styles.websiteButton}
-            onPress={() => Linking.openURL(shopDetails.websiteUri)}
-          >
-            <Text style={styles.websiteText}>Website</Text>
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.directionsButton} onPress={handleGetDirections}>
+            <Text style={styles.websiteText}>Directions</Text>
           </TouchableOpacity>
-        ) : null}
+          {loadingDetails ? (
+            <ActivityIndicator size="small" color={PINK} />
+          ) : shopDetails?.websiteUri ? (
+            <TouchableOpacity
+              style={styles.websiteButton}
+              onPress={() => Linking.openURL(shopDetails.websiteUri)}
+            >
+              <Text style={styles.websiteText}>Website</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
 
       {/* User Rating / Want to Try section */}
@@ -577,12 +609,18 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   badgeText: { fontFamily: 'Lexend_600SemiBold', fontSize: 12, color: TEXT_LIGHT },
+  actionRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  directionsButton: {
+    backgroundColor: ESPRESSO,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
   websiteButton: {
     backgroundColor: ESPRESSO,
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    alignSelf: 'flex-start',
   },
   websiteText: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: TEXT_LIGHT },
   section: { margin: 16 },

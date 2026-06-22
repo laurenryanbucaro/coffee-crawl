@@ -27,8 +27,12 @@ export default function MapScreen() {
   const [newShopAddress, setNewShopAddress] = useState('');
   const [region, setRegion] = useState(null);
   const [searchRegion, setSearchRegion] = useState(null);
+  const [nameQuery, setNameQuery] = useState('');
+  const [nameSearchResults, setNameSearchResults] = useState([]);
+  const [nameSearching, setNameSearching] = useState(false);
   const mapRef = useRef(null);
   const fetchController = useRef(null);
+  const nameSearchTimer = useRef(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -63,6 +67,55 @@ export default function MapScreen() {
     const kmPerDegree = 111;
     const radiusKm = (reg.latitudeDelta / 2) * kmPerDegree;
     return Math.min(Math.round(radiusKm * 1000), 20000);
+  }
+
+  function handleNameSearchChange(text) {
+    setNameQuery(text);
+    if (nameSearchTimer.current) clearTimeout(nameSearchTimer.current);
+    if (text.length < 2) { setNameSearchResults([]); return; }
+    nameSearchTimer.current = setTimeout(() => searchByName(text), 400);
+  }
+
+  async function searchByName(query) {
+    setNameSearching(true);
+    try {
+      const center = region || location;
+      const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': GOOGLE_KEY,
+          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating',
+        },
+        body: JSON.stringify({
+          textQuery: `${query} coffee`,
+          maxResultCount: 15,
+          locationBias: center ? {
+            circle: { center: { latitude: center.latitude, longitude: center.longitude }, radius: 50000 },
+          } : undefined,
+        }),
+      });
+      const data = await response.json();
+      setNameSearchResults(data.places || []);
+    } catch (e) {
+      console.error('Name search error:', e);
+    } finally {
+      setNameSearching(false);
+    }
+  }
+
+  function handleSelectNameResult(place) {
+    setNameQuery('');
+    setNameSearchResults([]);
+    router.push({
+      pathname: '/shop/[id]',
+      params: {
+        id: place.id,
+        name: place.displayName?.text,
+        address: place.formattedAddress,
+        rating: place.rating,
+      }
+    });
   }
 
   async function fetchSupabaseShops() {
@@ -307,6 +360,31 @@ export default function MapScreen() {
         </MapView>
       )}
 
+      <View style={styles.nameSearchWrap}>
+        <TextInput
+          style={styles.nameSearchInput}
+          placeholder="Search coffee shops by name..."
+          placeholderTextColor="#B59A7C"
+          value={nameQuery}
+          onChangeText={handleNameSearchChange}
+        />
+        {nameSearching && <ActivityIndicator size="small" color={RUST} style={{ marginTop: 8 }} />}
+        {nameSearchResults.length > 0 && (
+          <View style={styles.nameSearchResults}>
+            {nameSearchResults.map((place) => (
+              <TouchableOpacity
+                key={place.id}
+                style={styles.nameSearchResultRow}
+                onPress={() => handleSelectNameResult(place)}
+              >
+                <Text style={styles.nameSearchResultName}>{place.displayName?.text}</Text>
+                <Text style={styles.nameSearchResultAddress} numberOfLines={1}>{place.formattedAddress}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
+
       <View style={styles.controls}>
         <TouchableOpacity style={styles.sortButton} onPress={() => setShowSortMenu(!showSortMenu)}>
           <Text style={styles.sortButtonText}>
@@ -435,6 +513,30 @@ const styles = StyleSheet.create({
   errorText: { fontFamily: 'Lexend_500Medium', color: TEXT_LIGHT, fontSize: 14 },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: RUST },
   emptyText: { fontFamily: 'Lexend_500Medium', color: TEXT_LIGHT, fontSize: 14, textAlign: 'center' },
+  nameSearchWrap: {
+    backgroundColor: TAN,
+    margin: 12,
+    marginBottom: 0,
+    borderRadius: 12,
+    padding: 10,
+  },
+  nameSearchInput: {
+    fontFamily: 'Lexend_400Regular',
+    fontSize: 14,
+    color: RUST_DARK,
+    padding: 4,
+  },
+  nameSearchResults: {
+    marginTop: 6,
+  },
+  nameSearchResultRow: {
+    backgroundColor: '#FFFBF2',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 4,
+  },
+  nameSearchResultName: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: RUST_DARK },
+  nameSearchResultAddress: { fontFamily: 'Lexend_400Regular', fontSize: 11, color: ESPRESSO, marginTop: 2 },
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
