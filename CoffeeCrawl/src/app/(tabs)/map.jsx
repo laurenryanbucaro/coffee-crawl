@@ -15,6 +15,15 @@ const TAN = '#DCCAB4';
 const ESPRESSO = '#A36054';
 const TEXT_LIGHT = '#E8DCC6';
 
+const CHAIN_FILTERS = [
+  'mcdonald', 'burger', 'taco', 'subway', '7-eleven', 'chevron', 'shell',
+  'circle k', 'walmart', 'target', 'grocery', 'safeway', 'vons',
+  'jack in the box', 'wendy', 'pizza', 'starbucks', 'peet', 'dunkin',
+  'dutch bros', 'coffee bean and tea', 'caribou', 'tim horton', 'costa coffee',
+  'mcafe', 'panera', 'krispy kreme', 'einstein', 'bruegger', 'nestle',
+  'folgers', 'mccafe', 'scooters coffee', 'biggby', 'holiday stationstores',
+];
+
 export default function MapScreen() {
   const [location, setLocation] = useState(null);
   const [shops, setShops] = useState([]);
@@ -30,6 +39,7 @@ export default function MapScreen() {
   const [nameQuery, setNameQuery] = useState('');
   const [nameSearchResults, setNameSearchResults] = useState([]);
   const [nameSearching, setNameSearching] = useState(false);
+  const [hideChains, setHideChains] = useState(true);
   const mapRef = useRef(null);
   const fetchController = useRef(null);
   const nameSearchTimer = useRef(null);
@@ -116,6 +126,11 @@ export default function MapScreen() {
         rating: place.rating,
       }
     });
+  }
+
+  function isChain(name) {
+    const lower = name?.toLowerCase() || '';
+    return CHAIN_FILTERS.some(chain => lower.includes(chain));
   }
 
   async function fetchSupabaseShops() {
@@ -268,7 +283,8 @@ export default function MapScreen() {
   function getSortedShops() {
     const center = region || location;
     if (!center) return shops;
-    return [...shops].sort((a, b) => {
+    let filtered = hideChains ? shops.filter(s => !isChain(s.displayName?.text)) : shops;
+    return [...filtered].sort((a, b) => {
       if (sortBy === 'rating') {
         return (b.rating || 0) - (a.rating || 0);
       }
@@ -412,6 +428,15 @@ export default function MapScreen() {
         </TouchableOpacity>
       </View>
 
+      <TouchableOpacity
+        style={[styles.chainToggle, !hideChains && styles.chainToggleOff]}
+        onPress={() => setHideChains(!hideChains)}
+      >
+        <Text style={[styles.chainToggleText, !hideChains && styles.chainToggleTextOff]}>
+          {hideChains ? 'independent shops' : 'showing all shops'}
+        </Text>
+      </TouchableOpacity>
+
       {showSortMenu && (
         <View style={styles.dropdown}>
           <TouchableOpacity style={styles.dropdownItem} onPress={() => { setSortBy('distance'); setShowSortMenu(false); }}>
@@ -526,9 +551,7 @@ const styles = StyleSheet.create({
     color: RUST_DARK,
     padding: 4,
   },
-  nameSearchResults: {
-    marginTop: 6,
-  },
+  nameSearchResults: { marginTop: 6 },
   nameSearchResultRow: {
     backgroundColor: '#FFFBF2',
     borderRadius: 8,
@@ -566,6 +589,22 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   addButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 12, color: RUST },
+  chainToggle: {
+    alignSelf: 'center',
+    backgroundColor: RUST_DARK,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  chainToggleOff: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: TAN,
+  },
+  chainToggleText: { fontFamily: 'Lexend_700Bold', fontSize: 12, color: TAN },
+  chainToggleTextOff: { color: TAN },
   dropdown: {
     position: 'absolute',
     top: '44%',
@@ -612,63 +651,34 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: RUST,
   },
-  pinManual: {
-    backgroundColor: RUST_DARK,
-    borderColor: TAN,
-  },
+  pinManual: { backgroundColor: RUST_DARK, borderColor: TAN },
   pinEmoji: { fontSize: 18 },
-  callout: {
-    backgroundColor: TAN,
-    borderRadius: 10,
-    padding: 10,
-    width: 160,
-  },
+  callout: { backgroundColor: TAN, borderRadius: 10, padding: 10, width: 160 },
   calloutName: { fontFamily: 'Lexend_700Bold', fontSize: 12, color: RUST_DARK },
   calloutManual: { fontFamily: 'Lexend_500Medium', fontSize: 10, color: RUST, marginTop: 1, fontStyle: 'italic' },
   calloutRating: { fontFamily: 'Lexend_600SemiBold', fontSize: 11, color: RUST, marginTop: 2 },
   calloutTap: { fontFamily: 'Lexend_400Regular', fontSize: 10, color: ESPRESSO, marginTop: 4, fontStyle: 'italic' },
   modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center', alignItems: 'center',
   },
-  modalBox: {
-    backgroundColor: TAN,
-    borderRadius: 18,
-    padding: 24,
-    width: '85%',
-  },
+  modalBox: { backgroundColor: TAN, borderRadius: 18, padding: 24, width: '85%' },
   modalTitle: { fontFamily: 'Modak_400Regular', fontSize: 22, color: RUST, marginBottom: 6 },
   modalSub: { fontFamily: 'Lexend_400Regular', fontSize: 13, color: ESPRESSO, marginBottom: 16 },
   input: {
-    borderWidth: 1,
-    borderColor: ESPRESSO,
-    borderRadius: 10,
-    padding: 12,
-    fontFamily: 'Lexend_400Regular',
-    fontSize: 14,
-    color: RUST_DARK,
-    marginBottom: 12,
-    backgroundColor: '#FFFBF2',
+    borderWidth: 1, borderColor: ESPRESSO, borderRadius: 10, padding: 12,
+    fontFamily: 'Lexend_400Regular', fontSize: 14, color: RUST_DARK,
+    marginBottom: 12, backgroundColor: '#FFFBF2',
   },
   modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   modalCancel: {
-    flex: 1,
-    marginRight: 8,
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: ESPRESSO,
-    alignItems: 'center',
+    flex: 1, marginRight: 8, padding: 12, borderRadius: 10,
+    backgroundColor: ESPRESSO, alignItems: 'center',
   },
   modalCancelText: { fontFamily: 'Lexend_700Bold', color: TEXT_LIGHT },
   modalSubmit: {
-    flex: 1,
-    marginLeft: 8,
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: RUST,
-    alignItems: 'center',
+    flex: 1, marginLeft: 8, padding: 12, borderRadius: 10,
+    backgroundColor: RUST, alignItems: 'center',
   },
   modalSubmitText: { fontFamily: 'Lexend_700Bold', color: TEXT_LIGHT },
 });

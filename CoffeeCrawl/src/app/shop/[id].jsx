@@ -35,12 +35,22 @@ export default function ShopDetailScreen() {
   const [savingWantToTry, setSavingWantToTry] = useState(false);
   const [defaultMapApp, setDefaultMapApp] = useState('apple');
 
-  useEffect(() => {
+ useEffect(() => {
+    setShopDetails(null);
+    setLoadingDetails(true);
+    setSubmitted(false);
+    setUserScore(null);
+    setDrinkOrdered('');
+    setNote('');
+    setPhotos([]);
+    setExistingRatingId(null);
+    setIsWantToTry(false);
+    setWantToTryId(null);
     fetchShopDetails();
     loadExistingRating();
     loadWantToTryStatus();
     loadMapPreference();
-  }, []);
+  }, [id]);
 
   async function loadMapPreference() {
     try {
@@ -69,13 +79,16 @@ export default function ShopDetailScreen() {
   }
 
   async function fetchShopDetails() {
-    const isManual = !id || id.toString().startsWith('supabase-') ||
-                     id.toString().startsWith('manual-') ||
-                     id.toString().startsWith('golden-');
+    const idStr = id?.toString() || '';
+    const isManual = !idStr ||
+                     idStr.startsWith('supabase-') ||
+                     idStr.startsWith('manual-') ||
+                     idStr.startsWith('golden-') ||
+                     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idStr);
     if (isManual) { setLoadingDetails(false); return; }
     try {
       const response = await fetch(
-        `https://places.googleapis.com/v1/places/${id}`,
+        `https://places.googleapis.com/v1/places/${idStr}`,
         {
           headers: {
             'X-Goog-Api-Key': GOOGLE_KEY,
@@ -440,7 +453,6 @@ export default function ShopDetailScreen() {
         </View>
       </View>
 
-      {/* User Rating / Want to Try section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Your Rating</Text>
         {submitted ? (
@@ -462,10 +474,7 @@ export default function ShopDetailScreen() {
               >
                 <Text style={styles.editButtonText}>Edit</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={handleDeleteRating}
-              >
+              <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteRating}>
                 <Text style={styles.deleteButtonText}>Delete</Text>
               </TouchableOpacity>
             </View>
@@ -563,17 +572,10 @@ export default function ShopDetailScreen() {
             )}
 
             <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancel}
-                onPress={() => setShowRatingModal(false)}
-              >
+              <TouchableOpacity style={styles.modalCancel} onPress={() => setShowRatingModal(false)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalSubmit}
-                onPress={handleSubmitRating}
-                disabled={saving}
-              >
+              <TouchableOpacity style={styles.modalSubmit} onPress={handleSubmitRating} disabled={saving}>
                 {saving ? (
                   <ActivityIndicator color={TEXT_LIGHT} />
                 ) : (
@@ -593,140 +595,70 @@ const styles = StyleSheet.create({
   header: { padding: 16, paddingTop: 56 },
   backButton: { alignSelf: 'flex-start' },
   backText: { fontFamily: 'Lexend_700Bold', color: TEXT_LIGHT, fontSize: 16 },
-  shopCard: {
-    margin: 16,
-    backgroundColor: RUST_DARK,
-    borderRadius: 16,
-    padding: 20,
-  },
+  shopCard: { margin: 16, backgroundColor: RUST_DARK, borderRadius: 16, padding: 20 },
   shopName: { fontFamily: 'Modak_400Regular', fontSize: 24, color: TEXT_LIGHT, marginBottom: 6 },
   shopAddress: { fontFamily: 'Lexend_400Regular', fontSize: 14, color: TAN, marginBottom: 12 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  badge: {
-    backgroundColor: ESPRESSO,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
+  badge: { backgroundColor: ESPRESSO, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
   badgeText: { fontFamily: 'Lexend_600SemiBold', fontSize: 12, color: TEXT_LIGHT },
   actionRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  directionsButton: {
-    backgroundColor: ESPRESSO,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  websiteButton: {
-    backgroundColor: ESPRESSO,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
+  directionsButton: { backgroundColor: ESPRESSO, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8 },
+  websiteButton: { backgroundColor: ESPRESSO, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8 },
   websiteText: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: TEXT_LIGHT },
   section: { margin: 16 },
   sectionTitle: { fontFamily: 'Modak_400Regular', fontSize: 18, color: TEXT_LIGHT, marginBottom: 12 },
-  rateButton: {
-    backgroundColor: PINK,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
+  rateButton: { backgroundColor: PINK, borderRadius: 12, padding: 16, alignItems: 'center' },
   rateButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 15, color: TEXT_LIGHT },
   wantToTryButton: {
-    backgroundColor: TAN,
-    borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
-    marginTop: 10,
-    borderWidth: 1.5,
-    borderColor: ESPRESSO,
+    backgroundColor: TAN, borderRadius: 12, padding: 14, alignItems: 'center',
+    marginTop: 10, borderWidth: 1.5, borderColor: ESPRESSO,
   },
-  wantToTryButtonActive: {
-    backgroundColor: ESPRESSO,
-    borderColor: ESPRESSO,
-  },
+  wantToTryButtonActive: { backgroundColor: ESPRESSO, borderColor: ESPRESSO },
   wantToTryText: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: RUST_DARK },
   wantToTryTextActive: { color: TEXT_LIGHT },
-  submittedBox: {
-    backgroundColor: RUST_DARK,
-    borderRadius: 12,
-    padding: 16,
-  },
+  submittedBox: { backgroundColor: RUST_DARK, borderRadius: 12, padding: 16 },
   submittedScore: { fontFamily: 'Modak_400Regular', fontSize: 32, color: TEXT_LIGHT, marginBottom: 4 },
   submittedDrink: { fontFamily: 'Lexend_500Medium', fontSize: 14, color: TAN, marginBottom: 4 },
   submittedNote: { fontFamily: 'Lexend_400Regular', fontSize: 13, color: TAN, fontStyle: 'italic', marginBottom: 12 },
   photoThumb: { width: 70, height: 70, borderRadius: 8, marginRight: 8 },
   ratingActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  editButton: {
-    backgroundColor: PINK,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
+  editButton: { backgroundColor: PINK, borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 },
   editButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: RUST_DARK },
-  deleteButton: {
-    backgroundColor: ESPRESSO,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
+  deleteButton: { backgroundColor: ESPRESSO, borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 },
   deleteButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: TEXT_LIGHT },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalScroll: {
-    backgroundColor: TAN,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '90%',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalScroll: { backgroundColor: TAN, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' },
   modalBox: { padding: 24, paddingBottom: 40 },
   modalTitle: { fontFamily: 'Modak_400Regular', fontSize: 20, color: RUST, marginBottom: 16 },
   modalLabel: { fontFamily: 'Lexend_600SemiBold', fontSize: 13, color: RUST_DARK, marginBottom: 8, marginTop: 12 },
   scoreRow: { flexDirection: 'row', gap: 12 },
   scoreBtn: {
-    flex: 1, height: 48, borderRadius: 10,
-    borderWidth: 1.5, borderColor: ESPRESSO,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#FFFBF2',
+    flex: 1, height: 48, borderRadius: 10, borderWidth: 1.5, borderColor: ESPRESSO,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFBF2',
   },
   scoreBtnActive: { backgroundColor: RUST, borderColor: RUST },
   scoreBtnText: { fontFamily: 'Lexend_700Bold', fontSize: 16, color: RUST_DARK },
   scoreBtnTextActive: { color: TEXT_LIGHT },
   input: {
-    borderWidth: 1, borderColor: ESPRESSO,
-    borderRadius: 10, padding: 12,
-    fontFamily: 'Lexend_400Regular', fontSize: 14, color: RUST_DARK,
-    backgroundColor: '#FFFBF2',
+    borderWidth: 1, borderColor: ESPRESSO, borderRadius: 10, padding: 12,
+    fontFamily: 'Lexend_400Regular', fontSize: 14, color: RUST_DARK, backgroundColor: '#FFFBF2',
   },
   inputMulti: { height: 80, textAlignVertical: 'top' },
   photoPickerButton: {
-    borderWidth: 1.5, borderColor: ESPRESSO,
-    borderStyle: 'dashed', borderRadius: 10,
-    padding: 14, alignItems: 'center',
-    backgroundColor: '#FFFBF2',
+    borderWidth: 1.5, borderColor: ESPRESSO, borderStyle: 'dashed', borderRadius: 10,
+    padding: 14, alignItems: 'center', backgroundColor: '#FFFBF2',
   },
   photoPickerText: { fontFamily: 'Lexend_500Medium', fontSize: 14, color: RUST_DARK },
   photoPreviewWrap: { position: 'relative', marginRight: 8 },
   photoPreview: { width: 80, height: 80, borderRadius: 10 },
   photoRemove: {
-    position: 'absolute', top: -6, right: -6,
-    backgroundColor: ESPRESSO, borderRadius: 10,
-    width: 20, height: 20,
-    alignItems: 'center', justifyContent: 'center',
+    position: 'absolute', top: -6, right: -6, backgroundColor: ESPRESSO,
+    borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center',
   },
   photoRemoveText: { color: TEXT_LIGHT, fontSize: 10, fontFamily: 'Lexend_700Bold' },
   modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 },
-  modalCancel: {
-    flex: 1, marginRight: 8, padding: 14,
-    borderRadius: 12, backgroundColor: '#C9AD7E', alignItems: 'center',
-  },
+  modalCancel: { flex: 1, marginRight: 8, padding: 14, borderRadius: 12, backgroundColor: '#C9AD7E', alignItems: 'center' },
   modalCancelText: { fontFamily: 'Lexend_700Bold', color: RUST_DARK },
-  modalSubmit: {
-    flex: 1, marginLeft: 8, padding: 14,
-    borderRadius: 12, backgroundColor: RUST, alignItems: 'center',
-  },
+  modalSubmit: { flex: 1, marginLeft: 8, padding: 14, borderRadius: 12, backgroundColor: RUST, alignItems: 'center' },
   modalSubmitText: { fontFamily: 'Lexend_700Bold', color: TEXT_LIGHT },
 });
