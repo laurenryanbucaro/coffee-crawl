@@ -23,6 +23,7 @@ export default function ShopDetailScreen() {
   const [drinkOrdered, setDrinkOrdered] = useState('');
   const [note, setNote] = useState('');
   const [photos, setPhotos] = useState([]);
+  const [visibility, setVisibility] = useState('public');
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -34,8 +35,10 @@ export default function ShopDetailScreen() {
   const [wantToTryId, setWantToTryId] = useState(null);
   const [savingWantToTry, setSavingWantToTry] = useState(false);
   const [defaultMapApp, setDefaultMapApp] = useState('apple');
+  const [communityPosts, setCommunityPosts] = useState([]);
+  const [loadingCommunity, setLoadingCommunity] = useState(true);
 
- useEffect(() => {
+  useEffect(() => {
     setShopDetails(null);
     setLoadingDetails(true);
     setSubmitted(false);
@@ -43,13 +46,17 @@ export default function ShopDetailScreen() {
     setDrinkOrdered('');
     setNote('');
     setPhotos([]);
+    setVisibility('public');
     setExistingRatingId(null);
     setIsWantToTry(false);
     setWantToTryId(null);
+    setCommunityPosts([]);
+    setLoadingCommunity(true);
     fetchShopDetails();
     loadExistingRating();
     loadWantToTryStatus();
     loadMapPreference();
+    loadCommunityPosts();
   }, [id]);
 
   async function loadMapPreference() {
@@ -105,29 +112,71 @@ export default function ShopDetailScreen() {
     }
   }
 
+  async function getShopRow() {
+    const { data: byPlaceId } = await supabase
+      .from('shops')
+      .select('id')
+      .eq('google_place_id', id)
+      .maybeSingle();
+    if (byPlaceId) return byPlaceId;
+    const { data: byId } = await supabase
+      .from('shops')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle();
+    return byId;
+  }
+
+  async function loadCommunityPosts() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const shopData = await getShopRow();
+      if (!shopData) { setLoadingCommunity(false); return; }
+
+      const { data: ratingsData } = await supabase
+        .from('ratings')
+        .select('*, users(id, display_name, username, avatar_url), posts(photo_urls, media_types, caption)')
+        .eq('shop_id', shopData.id)
+        .order('visited_at', { ascending: false })
+        .limit(50);
+
+      if (!ratingsData) { setLoadingCommunity(false); return; }
+
+      let myFollowing = [];
+      let myFollowers = [];
+      if (user) {
+        const [{ data: followingData }, { data: followersData }] = await Promise.all([
+          supabase.from('follows').select('following_id').eq('follower_id', user.id),
+          supabase.from('follows').select('follower_id').eq('following_id', user.id),
+        ]);
+        myFollowing = (followingData || []).map(f => f.following_id);
+        myFollowers = (followersData || []).map(f => f.follower_id);
+      }
+
+      const visible = ratingsData.filter(r => {
+        if (user && r.user_id === user.id) return true;
+        const vis = r.visibility || 'public';
+        if (vis === 'public') return true;
+        if (vis === 'private') return false;
+        if (vis === 'friends') {
+          return myFollowing.includes(r.user_id) && myFollowers.includes(r.user_id);
+        }
+        return false;
+      });
+
+      setCommunityPosts(visible);
+    } catch (e) {
+      console.error('Community posts error:', e);
+    } finally {
+      setLoadingCommunity(false);
+    }
+  }
+
   async function loadExistingRating() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
-      let shopData = null;
-      const { data: byPlaceId } = await supabase
-        .from('shops')
-        .select('id')
-        .eq('google_place_id', id)
-        .maybeSingle();
-
-      shopData = byPlaceId;
-
-      if (!shopData) {
-        const { data: byId } = await supabase
-          .from('shops')
-          .select('id')
-          .eq('id', id)
-          .maybeSingle();
-        shopData = byId;
-      }
-
+      const shopData = await getShopRow();
       if (!shopData) return;
 
       const { data: ratingData } = await supabase
@@ -141,6 +190,7 @@ export default function ShopDetailScreen() {
         setUserScore(ratingData.score);
         setDrinkOrdered(ratingData.drink_ordered || '');
         setNote(ratingData.note || '');
+        setVisibility(ratingData.visibility || 'public');
         setExistingRatingId(ratingData.id);
         setSubmitted(true);
       }
@@ -181,7 +231,6 @@ export default function ShopDetailScreen() {
         setSavingWantToTry(false);
         return;
       }
-
       if (isWantToTry && wantToTryId) {
         await supabase.from('want_to_try').delete().eq('id', wantToTryId);
         setIsWantToTry(false);
@@ -220,36 +269,23 @@ export default function ShopDetailScreen() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const uploadedUrls = [];
-
       for (const asset of result.assets) {
         const fileName = `${session.user.id}-${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
         const formData = new FormData();
-        formData.append('file', {
-          uri: asset.uri,
-          name: fileName,
-          type: 'image/jpeg',
-        });
-
+        formData.append('file', { uri: asset.uri, name: fileName, type: 'image/jpeg' });
         const uploadResponse = await fetch(
           `${process.env.EXPO_PUBLIC_SUPABASE_URL}/storage/v1/object/posts/${fileName}`,
           {
             method: 'POST',
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-              'x-upsert': 'true',
-            },
+            headers: { Authorization: `Bearer ${session.access_token}`, 'x-upsert': 'true' },
             body: formData,
           }
         );
-
         if (uploadResponse.ok) {
-          const { data: { publicUrl } } = supabase.storage
-            .from('posts')
-            .getPublicUrl(fileName);
+          const { data: { publicUrl } } = supabase.storage.from('posts').getPublicUrl(fileName);
           uploadedUrls.push(publicUrl);
         } else {
-          const err = await uploadResponse.text();
-          console.error('Upload failed:', err);
+          console.error('Upload failed:', await uploadResponse.text());
         }
       }
       setPhotos([...photos, ...uploadedUrls]);
@@ -302,6 +338,7 @@ export default function ShopDetailScreen() {
           score: userScore,
           drink_ordered: drinkOrdered || null,
           note: note || null,
+          visibility: visibility,
           visited_at: new Date().toISOString(),
         }, { onConflict: 'user_id,shop_id' })
         .select('id')
@@ -327,6 +364,7 @@ export default function ShopDetailScreen() {
 
       setSubmitted(true);
       setShowRatingModal(false);
+      loadCommunityPosts();
       Alert.alert(
         'Rating saved!',
         `You rated ${name} a ${userScore}/5${drinkOrdered ? ` for your ${drinkOrdered}` : ''}.`,
@@ -360,7 +398,9 @@ export default function ShopDetailScreen() {
               setDrinkOrdered('');
               setNote('');
               setPhotos([]);
+              setVisibility('public');
               setExistingRatingId(null);
+              loadCommunityPosts();
               Alert.alert('Deleted', 'Your rating has been removed.');
             } catch (e) {
               Alert.alert('Error', 'Could not delete rating. Please try again.');
@@ -399,6 +439,16 @@ export default function ShopDetailScreen() {
     const closeMins = closeHour * 60 + closeMin;
     const isOpen = currentMins >= openMins && currentMins < closeMins;
     return { isOpen, closeTime: fmt(closeHour, closeMin), openTime: fmt(openHour, openMin) };
+  }
+
+  function timeAgo(dateStr) {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diff = Math.floor((now - date) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
   }
 
   const openStatus = getOpenStatus();
@@ -460,6 +510,9 @@ export default function ShopDetailScreen() {
             <Text style={styles.submittedScore}>{userScore} / 5</Text>
             {drinkOrdered ? <Text style={styles.submittedDrink}>{drinkOrdered}</Text> : null}
             {note ? <Text style={styles.submittedNote}>"{note}"</Text> : null}
+            <Text style={styles.visibilityTag}>
+              {visibility === 'public' ? 'Public' : visibility === 'friends' ? 'Friends only' : 'Private'}
+            </Text>
             {photos.length > 0 && (
               <ScrollView horizontal style={{ marginTop: 10 }}>
                 {photos.map((uri, i) => (
@@ -501,6 +554,60 @@ export default function ShopDetailScreen() {
         )}
       </View>
 
+      {/* Community Posts */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Community Posts</Text>
+        {loadingCommunity ? (
+          <ActivityIndicator color={TAN} style={{ marginTop: 12 }} />
+        ) : communityPosts.length === 0 ? (
+          <View style={styles.emptyCommunity}>
+            <Text style={styles.emptyCommunityText}>No posts yet — be the first to rate this shop!</Text>
+          </View>
+        ) : (
+          communityPosts.map((post) => {
+            const photoUrls = post.posts?.[0]?.photo_urls || [];
+            return (
+              <View key={post.id} style={styles.communityCard}>
+                <TouchableOpacity
+                  style={styles.communityHeader}
+                  onPress={() => router.push(`/user/${post.users?.id}`)}
+                >
+                  {post.users?.avatar_url ? (
+                    <Image source={{ uri: post.users.avatar_url }} style={styles.communityAvatar} />
+                  ) : (
+                    <View style={styles.communityAvatarPlaceholder}>
+                      <Text style={styles.communityAvatarText}>
+                        {post.users?.display_name?.[0]?.toUpperCase() || '?'}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.communityUserInfo}>
+                    <Text style={styles.communityName}>{post.users?.display_name}</Text>
+                    <Text style={styles.communityMeta}>@{post.users?.username} · {timeAgo(post.visited_at)}</Text>
+                  </View>
+                  <View style={styles.communityScore}>
+                    <Text style={styles.communityScoreText}>{post.score}/5</Text>
+                  </View>
+                </TouchableOpacity>
+                {photoUrls.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.communityPhotos}>
+                    {photoUrls.map((url, i) => (
+                      <Image key={i} source={{ uri: url }} style={styles.communityPhoto} />
+                    ))}
+                  </ScrollView>
+                )}
+                {post.drink_ordered && (
+                  <View style={styles.communityDrinkPill}>
+                    <Text style={styles.communityDrinkText}>{post.drink_ordered}</Text>
+                  </View>
+                )}
+                {post.note && <Text style={styles.communityNote}>"{post.note}"</Text>}
+              </View>
+            );
+          })
+        )}
+      </View>
+
       <Modal visible={showRatingModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalBox}>
@@ -539,6 +646,25 @@ export default function ShopDetailScreen() {
               onChangeText={setNote}
               multiline
             />
+
+            <Text style={styles.modalLabel}>Who can see this?</Text>
+            <View style={styles.visRow}>
+              {[
+                { key: 'public', label: 'Public' },
+                { key: 'friends', label: 'Friends' },
+                { key: 'private', label: 'Private' },
+              ].map(opt => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.visBtn, visibility === opt.key && styles.visBtnActive]}
+                  onPress={() => setVisibility(opt.key)}
+                >
+                  <Text style={[styles.visBtnText, visibility === opt.key && styles.visBtnTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
             <Text style={styles.modalLabel}>Photos (optional)</Text>
             <TouchableOpacity
@@ -605,8 +731,8 @@ const styles = StyleSheet.create({
   directionsButton: { backgroundColor: ESPRESSO, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8 },
   websiteButton: { backgroundColor: ESPRESSO, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8 },
   websiteText: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: TEXT_LIGHT },
-  section: { margin: 16 },
-  sectionTitle: { fontFamily: 'Modak_400Regular', fontSize: 18, color: TEXT_LIGHT, marginBottom: 12 },
+  section: { margin: 16, marginTop: 0 },
+  sectionTitle: { fontFamily: 'Modak_400Regular', fontSize: 18, color: TEXT_LIGHT, marginBottom: 12, marginTop: 16 },
   rateButton: { backgroundColor: PINK, borderRadius: 12, padding: 16, alignItems: 'center' },
   rateButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 15, color: TEXT_LIGHT },
   wantToTryButton: {
@@ -619,13 +745,48 @@ const styles = StyleSheet.create({
   submittedBox: { backgroundColor: RUST_DARK, borderRadius: 12, padding: 16 },
   submittedScore: { fontFamily: 'Modak_400Regular', fontSize: 32, color: TEXT_LIGHT, marginBottom: 4 },
   submittedDrink: { fontFamily: 'Lexend_500Medium', fontSize: 14, color: TAN, marginBottom: 4 },
-  submittedNote: { fontFamily: 'Lexend_400Regular', fontSize: 13, color: TAN, fontStyle: 'italic', marginBottom: 12 },
+  submittedNote: { fontFamily: 'Lexend_400Regular', fontSize: 13, color: TAN, fontStyle: 'italic', marginBottom: 8 },
+  visibilityTag: { fontFamily: 'Lexend_600SemiBold', fontSize: 11, color: TAN, marginBottom: 8 },
   photoThumb: { width: 70, height: 70, borderRadius: 8, marginRight: 8 },
   ratingActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
   editButton: { backgroundColor: PINK, borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 },
-  editButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: RUST_DARK },
+  editButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: TEXT_LIGHT },
   deleteButton: { backgroundColor: ESPRESSO, borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 },
   deleteButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: TEXT_LIGHT },
+  emptyCommunity: { backgroundColor: RUST_DARK, borderRadius: 12, padding: 20, alignItems: 'center' },
+  emptyCommunityText: { fontFamily: 'Lexend_500Medium', fontSize: 13, color: TAN, textAlign: 'center' },
+  communityCard: { backgroundColor: RUST_DARK, borderRadius: 14, marginBottom: 10, overflow: 'hidden' },
+  communityHeader: { flexDirection: 'row', alignItems: 'center', padding: 12 },
+  communityAvatar: { width: 36, height: 36, borderRadius: 18, marginRight: 10 },
+  communityAvatarPlaceholder: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: TAN,
+    justifyContent: 'center', alignItems: 'center', marginRight: 10,
+  },
+  communityAvatarText: { fontFamily: 'Modak_400Regular', fontSize: 14, color: RUST },
+  communityUserInfo: { flex: 1 },
+  communityName: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: TEXT_LIGHT },
+  communityMeta: { fontFamily: 'Lexend_400Regular', fontSize: 11, color: TAN, marginTop: 1 },
+  communityScore: { backgroundColor: TAN, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4 },
+  communityScoreText: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: RUST_DARK },
+  communityPhotos: { paddingLeft: 12, marginBottom: 8 },
+  communityPhoto: { width: 140, height: 110, borderRadius: 10, marginRight: 8 },
+  communityDrinkPill: {
+    alignSelf: 'flex-start', backgroundColor: TAN, borderRadius: 16,
+    paddingHorizontal: 10, paddingVertical: 3, marginLeft: 12, marginBottom: 8,
+  },
+  communityDrinkText: { fontFamily: 'Lexend_600SemiBold', fontSize: 11, color: RUST_DARK },
+  communityNote: {
+    fontFamily: 'Lexend_400Regular', fontSize: 12, color: TAN,
+    fontStyle: 'italic', marginHorizontal: 12, marginBottom: 12,
+  },
+  visRow: { flexDirection: 'row', gap: 8 },
+  visBtn: {
+    flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
+    borderWidth: 1.5, borderColor: ESPRESSO, backgroundColor: '#FFFBF2',
+  },
+  visBtnActive: { backgroundColor: RUST, borderColor: RUST },
+  visBtnText: { fontFamily: 'Lexend_600SemiBold', fontSize: 13, color: RUST_DARK },
+  visBtnTextActive: { color: TEXT_LIGHT },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalScroll: { backgroundColor: TAN, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' },
   modalBox: { padding: 24, paddingBottom: 40 },

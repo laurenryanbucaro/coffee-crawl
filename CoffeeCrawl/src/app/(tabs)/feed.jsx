@@ -23,17 +23,18 @@ export default function FeedScreen() {
     loadFeed();
   }, []);
 
-  async function loadFeed() {
+async function loadFeed() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: following } = await supabase
-        .from('follows')
-        .select('following_id')
-        .eq('follower_id', user.id);
+      const [{ data: following }, { data: followers }] = await Promise.all([
+        supabase.from('follows').select('following_id').eq('follower_id', user.id),
+        supabase.from('follows').select('follower_id').eq('following_id', user.id),
+      ]);
 
       const followingIds = (following || []).map(f => f.following_id);
+      const followerIds = (followers || []).map(f => f.follower_id);
       followingIds.push(user.id);
 
       const { data: ratingsData } = await supabase
@@ -48,7 +49,16 @@ export default function FeedScreen() {
         .order('visited_at', { ascending: false })
         .limit(50);
 
-      setPosts(ratingsData || []);
+      const visible = (ratingsData || []).filter(r => {
+        if (r.user_id === user.id) return true;
+        const vis = r.visibility || 'public';
+        if (vis === 'public') return true;
+        if (vis === 'private') return false;
+        if (vis === 'friends') return followerIds.includes(r.user_id);
+        return false;
+      });
+
+      setPosts(visible);
     } catch (e) {
       console.error(e);
     } finally {

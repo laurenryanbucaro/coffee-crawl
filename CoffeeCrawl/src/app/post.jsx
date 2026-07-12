@@ -26,6 +26,7 @@ export default function ComposePostScreen() {
   const [userScore, setUserScore] = useState(null);
   const [drinkOrdered, setDrinkOrdered] = useState('');
   const [note, setNote] = useState('');
+  const [visibility, setVisibility] = useState('public');
   const [media, setMedia] = useState([]);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -187,6 +188,7 @@ export default function ComposePostScreen() {
           score: userScore,
           drink_ordered: drinkOrdered || null,
           note: note || null,
+          visibility: visibility,
           visited_at: new Date().toISOString(),
         }, { onConflict: 'user_id,shop_id' })
         .select('id')
@@ -285,6 +287,25 @@ export default function ComposePostScreen() {
             multiline
           />
 
+          <Text style={styles.modalLabel}>Who can see this?</Text>
+          <View style={styles.visRow}>
+            {[
+              { key: 'public', label: 'Public' },
+              { key: 'friends', label: 'Friends' },
+              { key: 'private', label: 'Private' },
+            ].map(opt => (
+              <TouchableOpacity
+                key={opt.key}
+                style={[styles.visBtn, visibility === opt.key && styles.visBtnActive]}
+                onPress={() => setVisibility(opt.key)}
+              >
+                <Text style={[styles.visBtnText, visibility === opt.key && styles.visBtnTextActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           <Text style={styles.modalLabel}>Photos & Videos</Text>
           <TouchableOpacity style={styles.mediaPickerButton} onPress={handlePickMedia} disabled={uploadingMedia}>
             {uploadingMedia ? (
@@ -367,6 +388,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Lexend_400Regular', fontSize: 14, color: RUST_DARK, backgroundColor: '#FFFBF2',
   },
   inputMulti: { height: 80, textAlignVertical: 'top' },
+  visRow: { flexDirection: 'row', gap: 8 },
+  visBtn: {
+    flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
+    borderWidth: 1.5, borderColor: ESPRESSO, backgroundColor: TAN,
+  },
+  visBtnActive: { backgroundColor: RUST_DARK, borderColor: RUST_DARK },
+  visBtnText: { fontFamily: 'Lexend_600SemiBold', fontSize: 13, color: RUST_DARK },
+  visBtnTextActive: { color: TEXT_LIGHT },
   mediaPickerButton: {
     borderWidth: 1.5, borderColor: ESPRESSO, borderStyle: 'dashed', borderRadius: 10,
     padding: 14, alignItems: 'center', backgroundColor: '#FFFBF2',
