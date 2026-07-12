@@ -7,6 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "coffeecrawl",
     "userInterfaceStyle": "light",
+    "jsEngine": "jsc",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.laurenryanbucaro.coffeecrawl",
@@ -16,8 +17,7 @@
         "NSLocationWhenInUseUsageDescription": "Coffee Crawl uses your location to find coffee shops near you.",
         "NSPhotoLibraryUsageDescription": "Coffee Crawl needs access to your photos to let you add images to your ratings and profile.",
         "NSCameraUsageDescription": "Coffee Crawl needs access to your camera to take photos for your ratings.",
-        "NSContactsUsageDescription": "Coffee Crawl uses your contacts to help you find friends on the app.",
-        "ITSAppUsesNonExemptEncryption": false
+        "NSContactsUsageDescription": "Coffee Crawl uses your contacts to help you find friends on the app."
       }
     },
     "android": {
@@ -25,12 +25,7 @@
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#8C3235"
       },
-      "package": "com.laurenryanbucaro.coffeecrawl",
-      "permissions": [
-        "android.permission.RECORD_AUDIO",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
-      ]
+      "package": "com.laurenryanbucaro.coffeecrawl"
     },
     "web": {
       "output": "static",
@@ -69,11 +64,9 @@
       "reactCompiler": false
     },
     "extra": {
-      "router": {},
       "eas": {
         "projectId": "681117a0-b9c5-4473-ae20-8684bc8914a2"
       }
-    },
-    "owner": "lbuc"
+    }
   }
 }
