@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, FlatList,
   ActivityIndicator, TouchableOpacity, RefreshControl, Image, ScrollView
 } from 'react-native';
-import { VideoView, useVideoPlayer } from 'expo-video';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { supabase } from '../../../lib/supabase';
 import { useRouter } from 'expo-router';
 
@@ -12,6 +12,21 @@ const RUST_DARK = '#672427';
 const TAN = '#DCCAB4';
 const ESPRESSO = '#A36054';
 const TEXT_LIGHT = '#E8DCC6';
+
+function FeedVideo({ url }) {
+  const player = useVideoPlayer(url, (p) => {
+    p.loop = true;
+  });
+  return (
+    <VideoView
+      style={styles.photo}
+      player={player}
+      allowsFullscreen
+      allowsPictureInPicture
+      contentFit="cover"
+    />
+  );
+}
 
 export default function FeedScreen() {
   const [posts, setPosts] = useState([]);
@@ -23,7 +38,7 @@ export default function FeedScreen() {
     loadFeed();
   }, []);
 
-async function loadFeed() {
+  async function loadFeed() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -158,14 +173,7 @@ async function loadFeed() {
                   {photoUrls.map((url, i) => {
                     const isVideo = mediaTypes[i] === 'video';
                     return isVideo ? (
-                      <Video
-                        key={i}
-                        source={{ uri: url }}
-                        style={styles.photo}
-                        useNativeControls
-                        resizeMode="cover"
-                        isLooping
-                      />
+                      <FeedVideo key={i} url={url} />
                     ) : (
                       <Image key={i} source={{ uri: url }} style={styles.photo} />
                     );
