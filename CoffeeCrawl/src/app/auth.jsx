@@ -3,6 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView
 } from 'react-native';
+import { Stack } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 
 const RUST = '#8C3235';
@@ -13,19 +14,41 @@ const TEXT_LIGHT = '#E8DCC6';
 
 export default function AuthScreen() {
   const [mode, setMode] = useState('login');
-  const [resetSent, setResetSent] = useState(false);
+  const [identifier, setIdentifier] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
 
+  async function resolveEmail(input) {
+    // If it looks like an email, use it directly.
+    if (input.includes('@')) return input.trim();
+    // Otherwise treat it as a username and look up the email.
+    const { data, error } = await supabase
+      .from('users')
+      .select('email')
+      .eq('username', input.trim().toLowerCase())
+      .maybeSingle();
+    if (error || !data?.email) return null;
+    return data.email;
+  }
+
   async function handleLogin() {
-    if (!email || !password) {
-      Alert.alert('Missing fields', 'Please enter your email and password.');
+    if (!identifier || !password) {
+      Alert.alert('Missing fields', 'Please enter your email or username and password.');
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const resolvedEmail = await resolveEmail(identifier);
+    if (!resolvedEmail) {
+      setLoading(false);
+      Alert.alert('Login failed', 'No account found with that username or email.');
+      return;
+    }
+    const { error } = await supabase.auth.signInWithPassword({
+      email: resolvedEmail,
+      password,
+    });
     setLoading(false);
     if (error) Alert.alert('Login failed', error.message);
   }
@@ -40,117 +63,161 @@ export default function AuthScreen() {
       return;
     }
     setLoading(true);
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) {
+
+    const cleanUsername = username.trim().toLowerCase();
+
+    // Check the username isn't taken before we create the auth user.
+    const { data: existing } = await supabase
+      .from('users')
+      .select('id')
+      .eq('username', cleanUsername)
+      .maybeSingle();
+
+    if (existing) {
       setLoading(false);
+      Alert.alert('Username taken', 'Please choose a different username.');
+      return;
+    }
+
+    // The database trigger creates the users row automatically using this metadata.
+    const { error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { data: { username: cleanUsername } },
+    });
+
+    setLoading(false);
+
+    if (error) {
       Alert.alert('Sign up failed', error.message);
       return;
     }
-    if (data.user) {
-      const { error: profileError } = await supabase
-        .from('users')
-        .insert({ id: data.user.id, username, display_name: username });
-      if (profileError) {
-        setLoading(false);
-        Alert.alert('Profile error', profileError.message);
-        return;
-      }
-    }
-    setLoading(false);
+
     Alert.alert('Welcome!', 'Account created. Please check your email to confirm.');
   }
 
   async function handleResetPassword() {
-    if (!email) {
+    const input = mode === 'login' ? identifier : email;
+    if (!input) {
       Alert.alert('Email required', 'Please enter your email address first.');
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    const resolvedEmail = await resolveEmail(input);
+    if (!resolvedEmail) {
+      setLoading(false);
+      Alert.alert('Error', 'No account found with that username or email.');
+      return;
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(resolvedEmail);
     setLoading(false);
     if (error) {
       Alert.alert('Error', error.message);
       return;
     }
-    setResetSent(true);
     Alert.alert('Check your email', 'We sent you a password reset link.');
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
-        <Text style={styles.logo}>Coffee Crawl</Text>
-        <Text style={styles.tagline}>Discover · Rate · Share</Text>
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
+          <Text style={styles.logo}>Coffee Crawl</Text>
+          <Text style={styles.tagline}>Discover · Rate · Share</Text>
 
-        <View style={styles.tabs}>
-          <TouchableOpacity
-            style={[styles.tab, mode === 'login' && styles.tabActive]}
-            onPress={() => setMode('login')}
-          >
-            <Text style={[styles.tabText, mode === 'login' && styles.tabTextActive]}>Log In</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, mode === 'signup' && styles.tabActive]}
-            onPress={() => setMode('signup')}
-          >
-            <Text style={[styles.tabText, mode === 'signup' && styles.tabTextActive]}>Sign Up</Text>
-          </TouchableOpacity>
-        </View>
+          <View style={styles.tabs}>
+            <TouchableOpacity
+              style={[styles.tab, mode === 'login' && styles.tabActive]}
+              onPress={() => setMode('login')}
+            >
+              <Text style={[styles.tabText, mode === 'login' && styles.tabTextActive]}>Log In</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, mode === 'signup' && styles.tabActive]}
+              onPress={() => setMode('signup')}
+            >
+              <Text style={[styles.tabText, mode === 'signup' && styles.tabTextActive]}>Sign Up</Text>
+            </TouchableOpacity>
+          </View>
 
-        {mode === 'signup' && (
+          {mode === 'login' ? (
+            <TextInput
+              style={styles.input}
+              placeholder="Email or username"
+              placeholderTextColor={ESPRESSO}
+              value={identifier}
+              onChangeText={setIdentifier}
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="username"
+              autoComplete="username"
+            />
+          ) : (
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="Username"
+                placeholderTextColor={ESPRESSO}
+                value={username}
+                onChangeText={setUsername}
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="nickname"
+                autoComplete="username-new"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                placeholderTextColor={ESPRESSO}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                textContentType="emailAddress"
+                autoComplete="email"
+              />
+            </>
+          )}
+
           <TextInput
             style={styles.input}
-            placeholder="Username"
+            placeholder="Password"
             placeholderTextColor={ESPRESSO}
-            value={username}
-            onChangeText={setUsername}
-            autoCapitalize="none"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            textContentType={mode === 'login' ? 'password' : 'newPassword'}
+            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+            passwordRules="minlength: 6;"
           />
-        )}
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor={ESPRESSO}
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
-
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor={ESPRESSO}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
-
-        <TouchableOpacity
-          style={styles.button}
-          onPress={mode === 'login' ? handleLogin : handleSignUp}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={TEXT_LIGHT} />
-          ) : (
-            <Text style={styles.buttonText}>
-              {mode === 'login' ? 'Log In' : 'Create Account'}
-            </Text>
-          )}
-        </TouchableOpacity>
-
-        {mode === 'login' && (
-          <TouchableOpacity style={styles.forgotLink} onPress={handleResetPassword} disabled={loading}>
-            <Text style={styles.forgotText}>Forgot password?</Text>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={mode === 'login' ? handleLogin : handleSignUp}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color={TEXT_LIGHT} />
+            ) : (
+              <Text style={styles.buttonText}>
+                {mode === 'login' ? 'Log In' : 'Create Account'}
+              </Text>
+            )}
           </TouchableOpacity>
-        )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+          {mode === 'login' && (
+            <TouchableOpacity style={styles.forgotLink} onPress={handleResetPassword} disabled={loading}>
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </>
   );
 }
 

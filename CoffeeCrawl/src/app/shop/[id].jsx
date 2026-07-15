@@ -24,6 +24,8 @@ export default function ShopDetailScreen() {
   const [note, setNote] = useState('');
   const [photos, setPhotos] = useState([]);
   const [visibility, setVisibility] = useState('public');
+  const [workFriendly, setWorkFriendly] = useState(false);
+  const [workStats, setWorkStats] = useState(null);
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -47,6 +49,8 @@ export default function ShopDetailScreen() {
     setNote('');
     setPhotos([]);
     setVisibility('public');
+    setWorkFriendly(false);
+    setWorkStats(null);
     setExistingRatingId(null);
     setIsWantToTry(false);
     setWantToTryId(null);
@@ -57,6 +61,7 @@ export default function ShopDetailScreen() {
     loadWantToTryStatus();
     loadMapPreference();
     loadCommunityPosts();
+    loadWorkStats();
   }, [id]);
 
   async function loadMapPreference() {
@@ -127,6 +132,21 @@ export default function ShopDetailScreen() {
     return byId;
   }
 
+  async function loadWorkStats() {
+    try {
+      const shopData = await getShopRow();
+      if (!shopData) return;
+      const { data } = await supabase
+        .from('shop_work_stats')
+        .select('work_votes, total_votes')
+        .eq('shop_id', shopData.id)
+        .maybeSingle();
+      if (data) setWorkStats(data);
+    } catch (e) {
+      console.error('Work stats error:', e);
+    }
+  }
+
   async function loadCommunityPosts() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -191,6 +211,7 @@ export default function ShopDetailScreen() {
         setDrinkOrdered(ratingData.drink_ordered || '');
         setNote(ratingData.note || '');
         setVisibility(ratingData.visibility || 'public');
+        setWorkFriendly(ratingData.work_friendly || false);
         setExistingRatingId(ratingData.id);
         setSubmitted(true);
       }
@@ -339,6 +360,7 @@ export default function ShopDetailScreen() {
           drink_ordered: drinkOrdered || null,
           note: note || null,
           visibility: visibility,
+          work_friendly: workFriendly,
           visited_at: new Date().toISOString(),
         }, { onConflict: 'user_id,shop_id' })
         .select('id')
@@ -365,6 +387,7 @@ export default function ShopDetailScreen() {
       setSubmitted(true);
       setShowRatingModal(false);
       loadCommunityPosts();
+      loadWorkStats();
       Alert.alert(
         'Rating saved!',
         `You rated ${name} a ${userScore}/5${drinkOrdered ? ` for your ${drinkOrdered}` : ''}.`,
@@ -399,8 +422,10 @@ export default function ShopDetailScreen() {
               setNote('');
               setPhotos([]);
               setVisibility('public');
+              setWorkFriendly(false);
               setExistingRatingId(null);
               loadCommunityPosts();
+              loadWorkStats();
               Alert.alert('Deleted', 'Your rating has been removed.');
             } catch (e) {
               Alert.alert('Error', 'Could not delete rating. Please try again.');
@@ -484,6 +509,13 @@ export default function ShopDetailScreen() {
               </Text>
             </View>
           )}
+          {workStats && workStats.work_votes > 0 && (
+            <View style={styles.workBadge}>
+              <Text style={styles.badgeText}>
+                {workStats.work_votes} {workStats.work_votes === 1 ? 'person says' : 'people say'} good for working
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.actionRow}>
@@ -512,6 +544,7 @@ export default function ShopDetailScreen() {
             {note ? <Text style={styles.submittedNote}>"{note}"</Text> : null}
             <Text style={styles.visibilityTag}>
               {visibility === 'public' ? 'Public' : visibility === 'friends' ? 'Friends only' : 'Private'}
+              {workFriendly ? ' · Good for working' : ''}
             </Text>
             {photos.length > 0 && (
               <ScrollView horizontal style={{ marginTop: 10 }}>
@@ -666,6 +699,16 @@ export default function ShopDetailScreen() {
               ))}
             </View>
 
+            <Text style={styles.modalLabel}>Good for working / studying?</Text>
+            <TouchableOpacity
+              style={[styles.workToggle, workFriendly && styles.workToggleActive]}
+              onPress={() => setWorkFriendly(!workFriendly)}
+            >
+              <Text style={[styles.workToggleText, workFriendly && styles.workToggleTextActive]}>
+                {workFriendly ? '✓ Good for working' : 'Tap if wifi, outlets, seating'}
+              </Text>
+            </TouchableOpacity>
+
             <Text style={styles.modalLabel}>Photos (optional)</Text>
             <TouchableOpacity
               style={styles.photoPickerButton}
@@ -727,6 +770,7 @@ const styles = StyleSheet.create({
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   badge: { backgroundColor: ESPRESSO, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
   badgeText: { fontFamily: 'Lexend_600SemiBold', fontSize: 12, color: TEXT_LIGHT },
+  workBadge: { backgroundColor: RUST, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
   actionRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
   directionsButton: { backgroundColor: ESPRESSO, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8 },
   websiteButton: { backgroundColor: ESPRESSO, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8 },
@@ -787,6 +831,13 @@ const styles = StyleSheet.create({
   visBtnActive: { backgroundColor: RUST, borderColor: RUST },
   visBtnText: { fontFamily: 'Lexend_600SemiBold', fontSize: 13, color: RUST_DARK },
   visBtnTextActive: { color: TEXT_LIGHT },
+  workToggle: {
+    borderWidth: 1.5, borderColor: ESPRESSO, borderRadius: 10,
+    padding: 14, alignItems: 'center', backgroundColor: '#FFFBF2',
+  },
+  workToggleActive: { backgroundColor: RUST, borderColor: RUST },
+  workToggleText: { fontFamily: 'Lexend_600SemiBold', fontSize: 13, color: RUST_DARK },
+  workToggleTextActive: { color: TEXT_LIGHT },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalScroll: { backgroundColor: TAN, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' },
   modalBox: { padding: 24, paddingBottom: 40 },

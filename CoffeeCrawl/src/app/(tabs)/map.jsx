@@ -40,6 +40,8 @@ export default function MapScreen() {
   const [nameSearchResults, setNameSearchResults] = useState([]);
   const [nameSearching, setNameSearching] = useState(false);
   const [hideChains, setHideChains] = useState(true);
+  const [workOnly, setWorkOnly] = useState(false);
+  const [workShopIds, setWorkShopIds] = useState(new Set());
   const mapRef = useRef(null);
   const fetchController = useRef(null);
   const nameSearchTimer = useRef(null);
@@ -47,7 +49,26 @@ export default function MapScreen() {
 
   useEffect(() => {
     getUserLocation();
+    loadWorkFriendlyShops();
   }, []);
+
+  async function loadWorkFriendlyShops() {
+    try {
+      const { data } = await supabase
+        .from('shop_work_stats')
+        .select('shop_id, work_votes')
+        .gt('work_votes', 0);
+      if (!data || data.length === 0) return;
+      const ids = data.map(d => d.shop_id);
+      const { data: shopsData } = await supabase
+        .from('shops')
+        .select('id, google_place_id')
+        .in('id', ids);
+      setWorkShopIds(new Set((shopsData || []).map(s => s.google_place_id).filter(Boolean)));
+    } catch (e) {
+      console.error('Work shops error:', e);
+    }
+  }
 
   async function getUserLocation() {
     try {
@@ -284,6 +305,9 @@ export default function MapScreen() {
     const center = region || location;
     if (!center) return shops;
     let filtered = hideChains ? shops.filter(s => !isChain(s.displayName?.text)) : shops;
+    if (workOnly) {
+      filtered = filtered.filter(s => workShopIds.has(s.id));
+    }
     return [...filtered].sort((a, b) => {
       if (sortBy === 'rating') {
         return (b.rating || 0) - (a.rating || 0);
@@ -428,14 +452,24 @@ export default function MapScreen() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity
-        style={[styles.chainToggle, !hideChains && styles.chainToggleOff]}
-        onPress={() => setHideChains(!hideChains)}
-      >
-        <Text style={[styles.chainToggleText, !hideChains && styles.chainToggleTextOff]}>
-          {hideChains ? 'independent shops' : 'showing all shops'}
-        </Text>
-      </TouchableOpacity>
+      <View style={styles.toggleRow}>
+        <TouchableOpacity
+          style={[styles.chainToggle, !hideChains && styles.chainToggleOff]}
+          onPress={() => setHideChains(!hideChains)}
+        >
+          <Text style={styles.chainToggleText}>
+            {hideChains ? 'Independent only' : 'All shops'}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.chainToggle, !workOnly && styles.chainToggleOff]}
+          onPress={() => setWorkOnly(!workOnly)}
+        >
+          <Text style={styles.chainToggleText}>
+            {workOnly ? '✓ Good for working' : 'Good for working'}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {showSortMenu && (
         <View style={styles.dropdown}>
@@ -450,7 +484,11 @@ export default function MapScreen() {
 
       {sortedShops.length === 0 && !loading ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>No coffee shops found — tap "Search here" after moving the map</Text>
+          <Text style={styles.emptyText}>
+            {workOnly
+              ? 'No work-friendly shops here yet — rate a shop and tag it!'
+              : 'No coffee shops found — tap "Search here" after moving the map'}
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -485,6 +523,7 @@ export default function MapScreen() {
                   <Text style={styles.cardAddress} numberOfLines={1}>{item.formattedAddress}</Text>
                   {dist && <Text style={styles.cardDist}>{dist} km away</Text>}
                   {item.isManual && <Text style={styles.cardManual}>Community added</Text>}
+                  {workShopIds.has(item.id) && <Text style={styles.cardWork}>Good for working</Text>}
                 </View>
                 {item.rating && (
                   <View style={styles.ratingBadge}>
@@ -589,14 +628,12 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   addButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 12, color: RUST },
+  toggleRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 8, marginBottom: 4 },
   chainToggle: {
-    alignSelf: 'center',
     backgroundColor: RUST_DARK,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 6,
-    marginTop: 8,
-    marginBottom: 4,
   },
   chainToggleOff: {
     backgroundColor: 'transparent',
@@ -604,7 +641,6 @@ const styles = StyleSheet.create({
     borderColor: TAN,
   },
   chainToggleText: { fontFamily: 'Lexend_700Bold', fontSize: 12, color: TAN },
-  chainToggleTextOff: { color: TAN },
   dropdown: {
     position: 'absolute',
     top: '44%',
@@ -637,6 +673,7 @@ const styles = StyleSheet.create({
   cardAddress: { fontFamily: 'Lexend_400Regular', fontSize: 12, color: ESPRESSO, marginTop: 2 },
   cardDist: { fontFamily: 'Lexend_400Regular', fontSize: 11, color: ESPRESSO, marginTop: 2 },
   cardManual: { fontFamily: 'Lexend_600SemiBold', fontSize: 10, color: RUST, marginTop: 2, fontStyle: 'italic' },
+  cardWork: { fontFamily: 'Lexend_600SemiBold', fontSize: 10, color: RUST, marginTop: 2 },
   ratingBadge: {
     backgroundColor: RUST,
     borderRadius: 8,
