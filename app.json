@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "681117a0-b9c5-4473-ae20-8684bc8914a2"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.lbuc.coffeecrawl",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}
