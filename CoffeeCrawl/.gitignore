@@ -44,3 +44,7 @@ example
 
 .env
 .env.txt
+
+.env
+.env.*
+!.env.example
