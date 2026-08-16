@@ -157,9 +157,15 @@ export default function ProfileScreen() {
 
   async function updateProfile() {
     if (!newDisplayName.trim() || !newUsername.trim()) { Alert.alert('Missing fields', 'Please fill in both fields.'); return; }
-    const { error } = await supabase.from('users').update({ display_name: newDisplayName, username: newUsername }).eq('id', profile.id);
+    const cleanUsername = newUsername.trim().toLowerCase();
+    if (cleanUsername !== profile.username) {
+      const { data: existing } = await supabase
+        .from('users').select('id').eq('username', cleanUsername).maybeSingle();
+      if (existing) { Alert.alert('Username taken', 'Please choose a different username.'); return; }
+    }
+    const { error } = await supabase.from('users').update({ display_name: newDisplayName, username: cleanUsername }).eq('id', profile.id);
     if (error) { Alert.alert('Error', error.message); return; }
-    setProfile({ ...profile, display_name: newDisplayName, username: newUsername });
+    setProfile({ ...profile, display_name: newDisplayName, username: cleanUsername });
     setEditingProfile(false);
   }
 
@@ -215,15 +221,36 @@ export default function ProfileScreen() {
   }
 
   function getBestRating() { return ratings.length === 0 ? null : ratings[0]; }
-  function getTopShops() { return ratings.slice(0, 5); }
+
+  function getTopShops() {
+    const bestPerShop = {};
+    for (const r of ratings) {
+      if (!bestPerShop[r.shop_id] || r.score > bestPerShop[r.shop_id].score) {
+        bestPerShop[r.shop_id] = r;
+      }
+    }
+    return Object.values(bestPerShop).sort((a, b) => b.score - a.score).slice(0, 5);
+  }
+
+  function getUniqueRatedShops() {
+    const bestPerShop = {};
+    for (const r of ratings) {
+      if (!bestPerShop[r.shop_id] || r.score > bestPerShop[r.shop_id].score) {
+        bestPerShop[r.shop_id] = r;
+      }
+    }
+    return Object.values(bestPerShop).sort((a, b) => b.score - a.score);
+  }
 
   if (loading) {
     return <View style={styles.centered}><ActivityIndicator size="large" color={TAN} /></View>;
   }
 
+  const uniqueRatedShops = getUniqueRatedShops();
+  const uniqueShopCount = uniqueRatedShops.length;
   const topShops = getTopShops();
   const bestRating = getBestRating();
-  const level = getCrawlLevel(ratings.length);
+  const level = getCrawlLevel(uniqueShopCount);
 
   return (
     <ScrollView style={styles.container}>
@@ -295,13 +322,13 @@ export default function ProfileScreen() {
       {/* Crawl Level */}
       <View style={styles.levelBadge}>
         <Text style={styles.levelTitle}>{level.title}</Text>
-        <Text style={styles.levelCount}>{ratings.length} ratings</Text>
+        <Text style={styles.levelCount}>{uniqueShopCount} {uniqueShopCount === 1 ? 'shop' : 'shops'} rated</Text>
       </View>
 
       {/* Stats */}
       <View style={styles.statsRow}>
         <View style={styles.stat}>
-          <Text style={styles.statNum}>{ratings.length}</Text>
+          <Text style={styles.statNum}>{uniqueShopCount}</Text>
           <Text style={styles.statLabel}>Rated</Text>
         </View>
         <View style={styles.statDivider} />
@@ -332,7 +359,7 @@ export default function ProfileScreen() {
           <Text style={[styles.tabBtnText, activeTab === 'top' && styles.tabBtnTextActive]}>Top 5</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.tabBtn, activeTab === 'all' && styles.tabBtnActive]} onPress={() => setActiveTab('all')}>
-          <Text style={[styles.tabBtnText, activeTab === 'all' && styles.tabBtnTextActive]}>All Rated ({ratings.length})</Text>
+          <Text style={[styles.tabBtnText, activeTab === 'all' && styles.tabBtnTextActive]}>All Rated ({uniqueShopCount})</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.tabBtn, activeTab === 'wtt' && styles.tabBtnActive]} onPress={() => setActiveTab('wtt')}>
           <Text style={[styles.tabBtnText, activeTab === 'wtt' && styles.tabBtnTextActive]}>Want to Try</Text>
@@ -369,7 +396,7 @@ export default function ProfileScreen() {
       {/* All rated tab */}
       {activeTab === 'all' && (
         <View style={styles.section}>
-          {ratings.length > 0 ? ratings.map((r, i) => (
+          {uniqueRatedShops.length > 0 ? uniqueRatedShops.map((r, i) => (
             <TouchableOpacity key={r.id} style={styles.shopRow} onPress={() => router.push({
               pathname: '/shop/[id]',
               params: { id: r.shops?.google_place_id || r.shop_id, name: r.shops?.name, address: r.shops?.address }
@@ -600,20 +627,15 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: RUST },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: RUST },
   header: { alignItems: 'center', padding: 24, paddingTop: 40, position: 'relative' },
-  menuIcon: {
-    position: 'absolute', top: 44, left: 20, zIndex: 10, padding: 8, gap: 4,
-  },
+  menuIcon: { position: 'absolute', top: 44, left: 20, zIndex: 10, padding: 8, gap: 4 },
   menuLine: { width: 22, height: 2.5, backgroundColor: TEXT_LIGHT, borderRadius: 2 },
-  bellIcon: {
-    position: 'absolute', top: 44, right: 20, zIndex: 10, padding: 8,
-  },
+  bellIcon: { position: 'absolute', top: 44, right: 20, zIndex: 10, padding: 8 },
   bellEmoji: { fontSize: 22 },
   badge: {
     position: 'absolute', top: 4, right: 4,
     backgroundColor: TAN, borderRadius: 10,
     minWidth: 18, height: 18,
-    alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 4,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4,
   },
   badgeText: { fontFamily: 'Lexend_700Bold', fontSize: 10, color: RUST_DARK },
   accountInfoBox: {
@@ -679,10 +701,7 @@ const styles = StyleSheet.create({
   signOutText: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: TAN },
   supportButton: { marginHorizontal: 16, marginBottom: 40, padding: 14, borderRadius: 12, backgroundColor: ESPRESSO, alignItems: 'center' },
   supportText: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: TEXT_LIGHT },
-  notifBox: {
-    backgroundColor: TAN, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    maxHeight: '80%', marginTop: 'auto',
-  },
+  notifBox: { backgroundColor: TAN, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '80%', marginTop: 'auto' },
   notifHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     padding: 20, paddingBottom: 12, borderBottomWidth: 0.5, borderBottomColor: ESPRESSO,

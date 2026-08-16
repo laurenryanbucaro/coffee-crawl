@@ -26,13 +26,12 @@ export default function ShopDetailScreen() {
   const [visibility, setVisibility] = useState('public');
   const [workFriendly, setWorkFriendly] = useState(false);
   const [workStats, setWorkStats] = useState(null);
+  const [myReviews, setMyReviews] = useState([]);
   const [showRatingModal, setShowRatingModal] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [shopDetails, setShopDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(true);
-  const [existingRatingId, setExistingRatingId] = useState(null);
   const [isWantToTry, setIsWantToTry] = useState(false);
   const [wantToTryId, setWantToTryId] = useState(null);
   const [savingWantToTry, setSavingWantToTry] = useState(false);
@@ -43,7 +42,7 @@ export default function ShopDetailScreen() {
   useEffect(() => {
     setShopDetails(null);
     setLoadingDetails(true);
-    setSubmitted(false);
+    setMyReviews([]);
     setUserScore(null);
     setDrinkOrdered('');
     setNote('');
@@ -51,13 +50,12 @@ export default function ShopDetailScreen() {
     setVisibility('public');
     setWorkFriendly(false);
     setWorkStats(null);
-    setExistingRatingId(null);
     setIsWantToTry(false);
     setWantToTryId(null);
     setCommunityPosts([]);
     setLoadingCommunity(true);
     fetchShopDetails();
-    loadExistingRating();
+    loadMyReviews();
     loadWantToTryStatus();
     loadMapPreference();
     loadCommunityPosts();
@@ -147,6 +145,24 @@ export default function ShopDetailScreen() {
     }
   }
 
+  async function loadMyReviews() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const shopData = await getShopRow();
+      if (!shopData) { setMyReviews([]); return; }
+      const { data } = await supabase
+        .from('ratings')
+        .select('*, posts(photo_urls, media_types, caption)')
+        .eq('user_id', user.id)
+        .eq('shop_id', shopData.id)
+        .order('visited_at', { ascending: false });
+      setMyReviews(data || []);
+    } catch (e) {
+      console.error('Load reviews error:', e);
+    }
+  }
+
   async function loadCommunityPosts() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -189,34 +205,6 @@ export default function ShopDetailScreen() {
       console.error('Community posts error:', e);
     } finally {
       setLoadingCommunity(false);
-    }
-  }
-
-  async function loadExistingRating() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const shopData = await getShopRow();
-      if (!shopData) return;
-
-      const { data: ratingData } = await supabase
-        .from('ratings')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('shop_id', shopData.id)
-        .maybeSingle();
-
-      if (ratingData) {
-        setUserScore(ratingData.score);
-        setDrinkOrdered(ratingData.drink_ordered || '');
-        setNote(ratingData.note || '');
-        setVisibility(ratingData.visibility || 'public');
-        setWorkFriendly(ratingData.work_friendly || false);
-        setExistingRatingId(ratingData.id);
-        setSubmitted(true);
-      }
-    } catch (e) {
-      console.error('Load rating error:', e);
     }
   }
 
@@ -353,7 +341,7 @@ export default function ShopDetailScreen() {
 
       const { data: ratingData, error: ratingError } = await supabase
         .from('ratings')
-        .upsert({
+        .insert({
           user_id: user.id,
           shop_id: shopId,
           score: userScore,
@@ -362,12 +350,11 @@ export default function ShopDetailScreen() {
           visibility: visibility,
           work_friendly: workFriendly,
           visited_at: new Date().toISOString(),
-        }, { onConflict: 'user_id,shop_id' })
+        })
         .select('id')
         .single();
 
       if (ratingError) throw ratingError;
-      setExistingRatingId(ratingData.id);
 
       if (photos.length > 0) {
         await supabase.from('posts').insert({
@@ -384,27 +371,33 @@ export default function ShopDetailScreen() {
         setWantToTryId(null);
       }
 
-      setSubmitted(true);
+      setUserScore(null);
+      setDrinkOrdered('');
+      setNote('');
+      setPhotos([]);
+      setVisibility('public');
+      setWorkFriendly(false);
       setShowRatingModal(false);
+      loadMyReviews();
       loadCommunityPosts();
       loadWorkStats();
       Alert.alert(
-        'Rating saved!',
+        'Review saved!',
         `You rated ${name} a ${userScore}/5${drinkOrdered ? ` for your ${drinkOrdered}` : ''}.`,
         [{ text: 'Great!' }]
       );
     } catch (e) {
       console.error('Rating error:', e);
-      Alert.alert('Error', 'Could not save rating. Please try again.');
+      Alert.alert('Error', 'Could not save review. Please try again.');
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleDeleteRating() {
+  async function handleDeleteReview(reviewId) {
     Alert.alert(
-      'Delete Rating',
-      `Are you sure you want to delete your rating for ${name}? This cannot be undone.`,
+      'Delete Review',
+      'Are you sure you want to delete this review? This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -412,23 +405,13 @@ export default function ShopDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              if (existingRatingId) {
-                await supabase.from('posts').delete().eq('rating_id', existingRatingId);
-                await supabase.from('ratings').delete().eq('id', existingRatingId);
-              }
-              setSubmitted(false);
-              setUserScore(null);
-              setDrinkOrdered('');
-              setNote('');
-              setPhotos([]);
-              setVisibility('public');
-              setWorkFriendly(false);
-              setExistingRatingId(null);
+              await supabase.from('posts').delete().eq('rating_id', reviewId);
+              await supabase.from('ratings').delete().eq('id', reviewId);
+              loadMyReviews();
               loadCommunityPosts();
               loadWorkStats();
-              Alert.alert('Deleted', 'Your rating has been removed.');
             } catch (e) {
-              Alert.alert('Error', 'Could not delete rating. Please try again.');
+              Alert.alert('Error', 'Could not delete review. Please try again.');
             }
           }
         }
@@ -535,55 +518,66 @@ export default function ShopDetailScreen() {
         </View>
       </View>
 
+      {/* Your Reviews */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Your Rating</Text>
-        {submitted ? (
-          <View style={styles.submittedBox}>
-            <Text style={styles.submittedScore}>{userScore} / 5</Text>
-            {drinkOrdered ? <Text style={styles.submittedDrink}>{drinkOrdered}</Text> : null}
-            {note ? <Text style={styles.submittedNote}>"{note}"</Text> : null}
+        <Text style={styles.sectionTitle}>Your Reviews ({myReviews.length})</Text>
+
+        {myReviews.map((r) => (
+          <View key={r.id} style={styles.submittedBox}>
+            <View style={styles.reviewTopRow}>
+              <Text style={styles.submittedScore}>{r.score} / 5</Text>
+              <TouchableOpacity onPress={() => handleDeleteReview(r.id)}>
+                <Text style={styles.reviewDelete}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+            {r.drink_ordered ? <Text style={styles.submittedDrink}>{r.drink_ordered}</Text> : null}
+            {r.note ? <Text style={styles.submittedNote}>"{r.note}"</Text> : null}
             <Text style={styles.visibilityTag}>
-              {visibility === 'public' ? 'Public' : visibility === 'friends' ? 'Friends only' : 'Private'}
-              {workFriendly ? ' · Good for working' : ''}
+              {r.visibility === 'public' ? 'Public' : r.visibility === 'friends' ? 'Friends only' : 'Private'}
+              {r.work_friendly ? ' · Good for working' : ''}
+              {'  ·  '}{timeAgo(r.visited_at)}
             </Text>
-            {photos.length > 0 && (
+            {r.posts?.[0]?.photo_urls?.length > 0 && (
               <ScrollView horizontal style={{ marginTop: 10 }}>
-                {photos.map((uri, i) => (
+                {r.posts[0].photo_urls.map((uri, i) => (
                   <Image key={i} source={{ uri }} style={styles.photoThumb} />
                 ))}
               </ScrollView>
             )}
-            <View style={styles.ratingActions}>
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={() => { setSubmitted(false); setShowRatingModal(true); }}
-              >
-                <Text style={styles.editButtonText}>Edit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteRating}>
-                <Text style={styles.deleteButtonText}>Delete</Text>
-              </TouchableOpacity>
-            </View>
           </View>
-        ) : (
-          <>
-            <TouchableOpacity style={styles.rateButton} onPress={() => setShowRatingModal(true)}>
-              <Text style={styles.rateButtonText}>Rate this shop</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.wantToTryButton, isWantToTry && styles.wantToTryButtonActive]}
-              onPress={handleToggleWantToTry}
-              disabled={savingWantToTry}
-            >
-              {savingWantToTry ? (
-                <ActivityIndicator color={isWantToTry ? TEXT_LIGHT : RUST_DARK} />
-              ) : (
-                <Text style={[styles.wantToTryText, isWantToTry && styles.wantToTryTextActive]}>
-                  {isWantToTry ? '✓ On your Want to Try list' : '+ Want to Try'}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </>
+        ))}
+
+        <TouchableOpacity
+          style={styles.rateButton}
+          onPress={() => {
+            setUserScore(null);
+            setDrinkOrdered('');
+            setNote('');
+            setPhotos([]);
+            setVisibility('public');
+            setWorkFriendly(false);
+            setShowRatingModal(true);
+          }}
+        >
+          <Text style={styles.rateButtonText}>
+            {myReviews.length > 0 ? '+ Add another review' : 'Rate this shop'}
+          </Text>
+        </TouchableOpacity>
+
+        {myReviews.length === 0 && (
+          <TouchableOpacity
+            style={[styles.wantToTryButton, isWantToTry && styles.wantToTryButtonActive]}
+            onPress={handleToggleWantToTry}
+            disabled={savingWantToTry}
+          >
+            {savingWantToTry ? (
+              <ActivityIndicator color={isWantToTry ? TEXT_LIGHT : RUST_DARK} />
+            ) : (
+              <Text style={[styles.wantToTryText, isWantToTry && styles.wantToTryTextActive]}>
+                {isWantToTry ? '✓ On your Want to Try list' : '+ Want to Try'}
+              </Text>
+            )}
+          </TouchableOpacity>
         )}
       </View>
 
@@ -748,7 +742,7 @@ export default function ShopDetailScreen() {
                 {saving ? (
                   <ActivityIndicator color={TEXT_LIGHT} />
                 ) : (
-                  <Text style={styles.modalSubmitText}>Save Rating</Text>
+                  <Text style={styles.modalSubmitText}>Save Review</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -786,17 +780,14 @@ const styles = StyleSheet.create({
   wantToTryButtonActive: { backgroundColor: ESPRESSO, borderColor: ESPRESSO },
   wantToTryText: { fontFamily: 'Lexend_700Bold', fontSize: 14, color: RUST_DARK },
   wantToTryTextActive: { color: TEXT_LIGHT },
-  submittedBox: { backgroundColor: RUST_DARK, borderRadius: 12, padding: 16 },
+  submittedBox: { backgroundColor: RUST_DARK, borderRadius: 12, padding: 16, marginBottom: 10 },
+  reviewTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  reviewDelete: { fontFamily: 'Lexend_600SemiBold', fontSize: 12, color: TAN },
   submittedScore: { fontFamily: 'Modak_400Regular', fontSize: 32, color: TEXT_LIGHT, marginBottom: 4 },
   submittedDrink: { fontFamily: 'Lexend_500Medium', fontSize: 14, color: TAN, marginBottom: 4 },
   submittedNote: { fontFamily: 'Lexend_400Regular', fontSize: 13, color: TAN, fontStyle: 'italic', marginBottom: 8 },
   visibilityTag: { fontFamily: 'Lexend_600SemiBold', fontSize: 11, color: TAN, marginBottom: 8 },
   photoThumb: { width: 70, height: 70, borderRadius: 8, marginRight: 8 },
-  ratingActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  editButton: { backgroundColor: PINK, borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 },
-  editButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: TEXT_LIGHT },
-  deleteButton: { backgroundColor: ESPRESSO, borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 },
-  deleteButtonText: { fontFamily: 'Lexend_700Bold', fontSize: 13, color: TEXT_LIGHT },
   emptyCommunity: { backgroundColor: RUST_DARK, borderRadius: 12, padding: 20, alignItems: 'center' },
   emptyCommunityText: { fontFamily: 'Lexend_500Medium', fontSize: 13, color: TAN, textAlign: 'center' },
   communityCard: { backgroundColor: RUST_DARK, borderRadius: 14, marginBottom: 10, overflow: 'hidden' },
